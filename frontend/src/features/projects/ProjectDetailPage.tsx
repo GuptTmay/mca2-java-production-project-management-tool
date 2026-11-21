@@ -361,9 +361,14 @@ export function ProjectDetailPage() {
 
       {/* Kanban Board */}
       <div className="w-full min-w-0">
-        <SectionHeader title="Board" description="Drag and drop tasks to update their status" />
+        <SectionHeader title="Board" description="Search tasks, review priorities, and move tasks between allowed statuses." />
         <div className="w-full min-w-0 max-w-full">
-          <KanbanBoard projectId={projectId} onTaskClick={openEditModal} canEdit={canManage} userRole={(currentUserTeamRole as TeamRole) || 'MEMBER'} />
+          <KanbanBoard
+            projectId={projectId}
+            onTaskClick={openEditModal}
+            canChangeStatus={canManage || user?.role === 'ADMIN' || currentUserTeamRole === 'MEMBER'}
+            userRole={(currentUserTeamRole as TeamRole) || (user?.role === 'ADMIN' ? 'OWNER' : 'MEMBER')}
+          />
         </div>
       </div>
 

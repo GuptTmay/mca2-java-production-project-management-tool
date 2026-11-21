@@ -19,15 +19,30 @@ import {
   Moon,
   Sun,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  FolderKanban,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { Avatar } from './Avatar'
+import type { Project } from '../lib/types'
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/projects', label: 'Projects', icon: FolderKanban },
   { path: '/teams', label: 'Teams', icon: Users },
   { path: '/my-tasks', label: 'My Tasks', icon: CheckSquare },
 ]
+
+async function getTeamProjects(teamId: string): Promise<Project[]> {
+  const firstPage = await projectApi.list(teamId, undefined, 0, 50)
+  const remainingPages = await Promise.all(
+    Array.from({ length: Math.max(0, firstPage.totalPages - 1) }, (_, index) =>
+      projectApi.list(teamId, undefined, index + 1, 50),
+    ),
+  )
+  return [firstPage, ...remainingPages].flatMap((page) => page.content)
+}
 
 export default function AppLayout() {
   const { user, logout } = useAuth()
@@ -35,6 +50,7 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showTeamMenu, setShowTeamMenu] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -46,10 +62,20 @@ export default function AppLayout() {
     queryFn: () => teamApi.list(),
   })
 
+  const projectMatch = matchPath('/projects/:projectId', location.pathname)
+  const activeProjectId = projectMatch?.params.projectId
+  const activeProjectQuery = useQuery({
+    queryKey: ['projects', activeProjectId],
+    queryFn: () => projectApi.getById(activeProjectId!),
+    enabled: !!activeProjectId,
+    staleTime: 30_000,
+  })
+
   // Determine active team from route or fallback to first team
   const activeTeamId = (() => {
     const teamMatch = matchPath('/teams/:teamId', location.pathname)
     if (teamMatch?.params.teamId) return teamMatch.params.teamId
+    if (activeProjectQuery.data?.teamId) return activeProjectQuery.data.teamId
     return teamsQuery.data?.content?.[0]?.id
   })()
 
@@ -67,11 +93,12 @@ export default function AppLayout() {
 
   const projectsQuery = useQuery({
     queryKey: ['projects', activeTeam?.id],
-    queryFn: () => (activeTeam?.id ? projectApi.list(activeTeam.id) : Promise.resolve({ content: [] } as any)),
+    queryFn: () => getTeamProjects(activeTeam!.id),
     enabled: !!activeTeam?.id,
   })
 
-  const firstProject = projectsQuery.data?.content?.[0]
+  const projects = projectsQuery.data ?? []
+  const firstProject = projects[0]
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -107,13 +134,14 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside
         className={clsx(
-          'glass-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0',
+          'glass-sidebar fixed inset-y-0 left-0 z-50 flex w-64 flex-col transition-[width,transform] duration-300 ease-in-out lg:relative lg:translate-x-0',
+          sidebarCollapsed && 'lg:w-20',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex h-full w-64 flex-col">
+        <div className="flex h-full w-64 flex-col lg:w-full">
           {/* Logo */}
-          <div className="flex items-center gap-3 px-6 py-5">
+          <div className={clsx('flex items-center gap-3 px-6 py-5', sidebarCollapsed && 'lg:justify-center lg:px-3')}>
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-indigo-600 text-white shadow-lg shadow-brand-600/20">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
                 <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -122,34 +150,63 @@ export default function AppLayout() {
                 <rect x="3" y="14" width="7" height="7" rx="1" />
               </svg>
             </div>
-            <div>
+            <div className={clsx(sidebarCollapsed && 'lg:hidden')}>
               <h1 className="text-lg font-bold text-surface-900 dark:text-surface-100">TaskFlow</h1>
               <p className="text-xs text-surface-400">Project Management</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-1 px-4 py-2">
+          <nav className={clsx('space-y-1 px-4 py-2', sidebarCollapsed && 'lg:px-3')}>
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
+                title={sidebarCollapsed ? item.label : undefined}
+                aria-label={sidebarCollapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  clsx('nav-item', isActive ? 'nav-item-active' : 'nav-item-inactive')
+                  clsx(
+                    'nav-item',
+                    sidebarCollapsed && 'lg:justify-center lg:px-0',
+                    isActive ? 'nav-item-active' : 'nav-item-inactive',
+                  )
                 }
               >
                 <item.icon className="h-4.5 w-4.5 flex-shrink-0" />
-                <span>{item.label}</span>
+                <span className={clsx(sidebarCollapsed && 'lg:hidden')}>{item.label}</span>
               </NavLink>
             ))}
           </nav>
 
+          <div className={clsx('px-4 pb-3', sidebarCollapsed && 'lg:px-3')}>
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarOpen(false)
+                navigate('/projects', {
+                  state: { openCreateProject: true, teamId: activeTeam?.id },
+                })
+              }}
+              title={sidebarCollapsed ? 'Create project' : undefined}
+              className={clsx(
+                'flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-brand-700 hover:to-indigo-700',
+                sidebarCollapsed && 'lg:px-0',
+              )}
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className={clsx(sidebarCollapsed && 'lg:hidden')}>Create project</span>
+            </button>
+          </div>
+
           {/* User Section */}
-          <div className="border-t border-surface-200/60 dark:border-surface-700/60 p-4">
+          <div className={clsx(
+            'border-t border-surface-200/60 p-4 dark:border-surface-700/60',
+            sidebarCollapsed && 'lg:flex lg:justify-center lg:px-2',
+          )}>
             <div className="flex items-center gap-3 rounded-xl p-2 hover:bg-surface-100/40 dark:hover:bg-surface-800/40 transition-colors">
               <Avatar name={user ? `${user.firstName} ${user.lastName}` : undefined} email={user?.email} size="sm" />
-              <div className="flex-1 min-w-0">
+              <div className={clsx('flex-1 min-w-0', sidebarCollapsed && 'lg:hidden')}>
                 <p className="truncate text-sm font-semibold text-surface-900 dark:text-surface-100">
                   {user?.firstName} {user?.lastName}
                 </p>
@@ -167,7 +224,19 @@ export default function AppLayout() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <button
+                type="button"
+                onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                className="hidden rounded-lg p-2 text-surface-500 transition-colors hover:bg-surface-100/60 hover:text-brand-700 dark:hover:bg-surface-800/60 lg:inline-flex"
+              >
+                {sidebarCollapsed
+                  ? <PanelLeftOpen className="h-5 w-5" />
+                  : <PanelLeftClose className="h-5 w-5" />}
+              </button>
+              <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label={sidebarOpen ? 'Close navigation menu' : 'Open navigation menu'}
                 className="rounded-lg p-2 text-surface-500 hover:bg-surface-100/60 hover:text-brand-700 transition-colors lg:hidden"
               >
                 <Menu className="h-5 w-5" />

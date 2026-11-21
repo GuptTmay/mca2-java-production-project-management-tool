@@ -1,6 +1,6 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CalendarDays, FolderOpen, Plus, Search, Users, X } from 'lucide-react'
 import { projectApi, teamApi } from '../../api/endpoints'
@@ -36,6 +36,7 @@ async function getAllProjects(teamId: string) {
 export function ProjectsPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'ALL'>('ALL')
@@ -47,8 +48,17 @@ export function ProjectsPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
+  useEffect(() => {
+    const navigationState = location.state as { openCreateProject?: boolean; teamId?: string } | null
+    if (!navigationState?.openCreateProject) return
+
+    setShowForm(true)
+    if (navigationState.teamId) setTeamId(navigationState.teamId)
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null })
+  }, [location.key, location.pathname, location.search, location.state, navigate])
+
   const teamsQuery = useQuery({
-    queryKey: ['teams'],
+    queryKey: ['teams', 'all'],
     queryFn: getAllTeams,
   })
 
@@ -63,7 +73,7 @@ export function ProjectsPage() {
     })),
   })
   const creatableTeams = teams.filter((_, index) =>
-    teamMembersQueries[index]?.data?.some(
+    user?.role === 'ADMIN' || teamMembersQueries[index]?.data?.some(
       (member) => member.userId === user?.id && (member.teamRole === 'OWNER' || member.teamRole === 'MANAGER'),
     ),
   )

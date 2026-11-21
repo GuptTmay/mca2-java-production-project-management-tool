@@ -78,6 +78,10 @@ export function CommentSection({ taskId }: CommentSectionProps) {
         Comments
       </h3>
 
+      {commentsQuery.isError && (
+        <ErrorBanner message={extractErrorMessage(commentsQuery.error, 'Could not load comments')} />
+      )}
+
       {commentsQuery.data && commentsQuery.data.length === 0 && (
         <EmptyState title="No comments yet" description="Be the first to comment on this task." />
       )}
