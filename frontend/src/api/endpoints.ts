@@ -141,8 +141,8 @@ export const taskApi = {
   }) {
     return (await apiClient.post<Task>('/tasks', data)).data
   },
-  async board(projectId: string) {
-    return (await apiClient.get<PageResponse<Task>>('/tasks/board', { params: { projectId } })).data
+  async board(projectId: string, page = 0, size = 200) {
+    return (await apiClient.get<PageResponse<Task>>('/tasks/board', { params: { projectId, page, size } })).data
   },
   async getById(id: string) {
     return (await apiClient.get<Task>(`/tasks/${id}`)).data

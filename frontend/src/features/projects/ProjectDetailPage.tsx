@@ -134,7 +134,7 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in min-w-0 max-w-full">
+    <div className="w-full min-w-0 max-w-full space-y-6 animate-fade-in">
       <PageHeader
         title={project.name}
         description={project.description || 'No description provided'}
@@ -360,13 +360,15 @@ export function ProjectDetailPage() {
       )}
 
       {/* Kanban Board */}
-      <div>
+      <div className="w-full min-w-0">
         <SectionHeader title="Board" description="Drag and drop tasks to update their status" />
-        <KanbanBoard projectId={projectId} onTaskClick={openEditModal} canEdit={canManage} userRole={(currentUserTeamRole as TeamRole) || 'MEMBER'} />
+        <div className="w-full min-w-0 max-w-full">
+          <KanbanBoard projectId={projectId} onTaskClick={openEditModal} canEdit={canManage} userRole={(currentUserTeamRole as TeamRole) || 'MEMBER'} />
+        </div>
       </div>
 
       {/* Activity Timeline */}
-      <div>
+      <div className="w-full min-w-0">
         <SectionHeader title="Activity" description="Recent activity in this project" />
         <ActivityTimeline projectId={projectId} />
       </div>

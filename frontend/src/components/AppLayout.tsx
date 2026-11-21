@@ -161,7 +161,7 @@ export default function AppLayout() {
       </aside>
 
       {/* Main Content */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Top Navigation */}
         <header className="glass border-b border-surface-200/60 dark:border-surface-700/60 px-4 py-3 relative z-20">
           <div className="flex items-center justify-between">
@@ -304,8 +304,8 @@ export default function AppLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="mx-auto max-w-7xl p-4 lg:p-8"><Outlet /></div>
+        <main className="min-w-0 flex-1 overflow-y-auto scrollbar-thin">
+          <div className="mx-auto w-full min-w-0 max-w-7xl p-4 lg:p-8"><Outlet /></div>
         </main>
       </div>
     </div>

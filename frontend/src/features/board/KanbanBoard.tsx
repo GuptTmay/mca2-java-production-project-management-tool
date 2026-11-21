@@ -188,29 +188,33 @@ export function KanbanBoard({ projectId, onTaskClick, canEdit = true, userRole }
 
   return draggable ? (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+      <div className="w-full min-w-0 max-w-full overflow-x-auto px-1 pt-2 pb-5 scrollbar-thin">
+        <div className="flex w-max gap-4">
+          {TASK_STATUSES.map((status) => (
+            <Column
+              key={status}
+              status={status}
+              tasks={tasksByStatus(status)}
+              canDrop={getAllowedTargets(status, role).length > 0 || tasksByStatus(status).length === 0}
+              onTaskClickAction={onTaskClick}
+            />
+          ))}
+        </div>
+      </div>
+    </DndContext>
+  ) : (
+    <div className="w-full min-w-0 max-w-full overflow-x-auto px-1 pt-2 pb-5 scrollbar-thin">
+      <div className="flex w-max gap-4">
         {TASK_STATUSES.map((status) => (
           <Column
             key={status}
             status={status}
             tasks={tasksByStatus(status)}
-            canDrop={getAllowedTargets(status, role).length > 0 || tasksByStatus(status).length === 0}
+            canDrop={false}
             onTaskClickAction={onTaskClick}
           />
         ))}
       </div>
-    </DndContext>
-  ) : (
-    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
-      {TASK_STATUSES.map((status) => (
-        <Column
-          key={status}
-          status={status}
-          tasks={tasksByStatus(status)}
-          canDrop={false}
-          onTaskClickAction={onTaskClick}
-        />
-      ))}
     </div>
   )
 }
