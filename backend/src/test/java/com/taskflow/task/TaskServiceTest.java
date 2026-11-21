@@ -8,10 +8,6 @@ import com.taskflow.project.Project;
 import com.taskflow.project.ProjectAccessGuard;
 import com.taskflow.project.ProjectRepository;
 import com.taskflow.team.Team;
-import com.taskflow.team.TeamAccessGuard;
-import com.taskflow.team.TeamMember;
-import com.taskflow.team.TeamMemberRepository;
-import com.taskflow.team.TeamRole;
 import com.taskflow.task.TaskHistoryMapper;
 import com.taskflow.task.TaskHistoryRepository;
 import com.taskflow.task.dto.AssignTaskRequest;
@@ -60,10 +56,6 @@ class TaskServiceTest {
     @Mock
     private NotificationService notificationService;
     @Mock
-    private TeamAccessGuard teamAccessGuard;
-    @Mock
-    private TeamMemberRepository teamMemberRepository;
-    @Mock
     private TaskHistoryRepository taskHistoryRepository;
     @Mock
     private TaskHistoryMapper taskHistoryMapper;
@@ -73,12 +65,13 @@ class TaskServiceTest {
     @BeforeEach
     void setUp() {
         taskService = new TaskService(
-                taskRepository, labelRepository, projectRepository, userRepository, projectAccessGuard, taskMapper, activityService, notificationService, teamAccessGuard, teamMemberRepository, taskHistoryRepository, taskHistoryMapper);
+                taskRepository, labelRepository, projectRepository, userRepository, projectAccessGuard,
+                taskMapper, activityService, notificationService, taskHistoryRepository, taskHistoryMapper);
     }
 
     @Test
     void createTask_requiresManageAccess() {
-        User outsider = user(Role.DEVELOPER);
+        User outsider = user(Role.TEAM_MEMBER);
         Project project = project(outsider);
         CreateTaskRequest request = new CreateTaskRequest(project.getId(), "Fix bug", "desc", null, null, null);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
@@ -91,7 +84,7 @@ class TaskServiceTest {
 
     @Test
     void createTask_defaultsStatusToTodoAndPriorityToMedium() {
-        User reporter = user(Role.DEVELOPER);
+        User reporter = user(Role.TEAM_MEMBER);
         Project project = project(reporter);
         CreateTaskRequest request = new CreateTaskRequest(project.getId(), "Fix bug", "desc", null, null, null);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
@@ -115,22 +108,38 @@ class TaskServiceTest {
 
     @Test
     void createTask_rejectsAssigneeWhoIsNotAProjectMember() {
-        User reporter = user(Role.DEVELOPER);
-        User notAMember = user(Role.DEVELOPER);
+        User reporter = user(Role.TEAM_MEMBER);
+        User notAMember = user(Role.TEAM_MEMBER);
         Project project = project(reporter);
         CreateTaskRequest request = new CreateTaskRequest(
                 project.getId(), "Fix bug", "desc", null, notAMember.getId(), null);
 
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         when(userRepository.findById(notAMember.getId())).thenReturn(Optional.of(notAMember));
-        when(projectAccessGuard.isProjectMember(project.getId(), notAMember.getId())).thenReturn(false);
+        when(projectAccessGuard.isProjectMember(project, notAMember.getId())).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class, () -> taskService.createTask(request, reporter));
     }
 
     @Test
+    void createTask_rejectsDisabledAssignee() {
+        User reporter = user(Role.TEAM_MEMBER);
+        User disabledAssignee = user(Role.TEAM_MEMBER);
+        disabledAssignee.setEnabled(false);
+        Project project = project(reporter);
+        CreateTaskRequest request = new CreateTaskRequest(
+                project.getId(), "Fix bug", "desc", null, disabledAssignee.getId(), null);
+
+        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
+        when(userRepository.findById(disabledAssignee.getId())).thenReturn(Optional.of(disabledAssignee));
+
+        assertThrows(IllegalArgumentException.class, () -> taskService.createTask(request, reporter));
+        verify(projectAccessGuard, never()).isProjectMember(any(), any());
+    }
+
+    @Test
     void updateTask_forbidsAssigneeFromEditing() {
-        User assignee = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         UpdateTaskRequest request = new UpdateTaskRequest("New title", "desc", TaskPriority.HIGH, null);
@@ -145,8 +154,8 @@ class TaskServiceTest {
 
     @Test
     void updateTask_forbidsAPlainProjectMemberWhoIsNotTheAssignee() {
-        User assignee = user(Role.DEVELOPER);
-        User otherMember = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
+        User otherMember = user(Role.TEAM_MEMBER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         UpdateTaskRequest request = new UpdateTaskRequest("New title", "desc", TaskPriority.HIGH, null);
@@ -161,8 +170,8 @@ class TaskServiceTest {
 
     @Test
     void updateTask_allowsTeamManagerEvenWhenNotTheAssignee() {
-        User assignee = user(Role.DEVELOPER);
-        User manager = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
+        User manager = user(Role.PRODUCER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         UpdateTaskRequest request = new UpdateTaskRequest("New title", "desc", TaskPriority.HIGH, null);
@@ -177,16 +186,12 @@ class TaskServiceTest {
 
     @Test
     void updateStatus_allowsMemberTransitionsPermittedByTheirRole() {
-        User assignee = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         UpdateTaskStatusRequest request = new UpdateTaskStatusRequest(TaskStatus.IN_PROGRESS);
 
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
-        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
-        when(teamMemberRepository.findByTeamIdAndUserId(project.getTeam().getId(), assignee.getId()))
-                .thenReturn(Optional.of(new TeamMember(project.getTeam(), assignee, TeamRole.MEMBER)));
-
         taskService.updateStatus(task.getId(), request, assignee);
 
         assertThat(task.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
@@ -195,25 +200,21 @@ class TaskServiceTest {
 
     @Test
     void updateStatus_rejectsMemberTransitionsReservedForManagers() {
-        User member = user(Role.DEVELOPER);
+        User member = user(Role.TEAM_MEMBER);
         Project project = project(member);
         Task task = task(project, member, member);
         task.setStatus(TaskStatus.IN_REVIEW);
         UpdateTaskStatusRequest request = new UpdateTaskStatusRequest(TaskStatus.DONE);
 
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
-        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
-        when(teamMemberRepository.findByTeamIdAndUserId(project.getTeam().getId(), member.getId()))
-                .thenReturn(Optional.of(new TeamMember(project.getTeam(), member, TeamRole.MEMBER)));
-
-        assertThrows(InvalidStateTransitionException.class,
+        assertThrows(ForbiddenOperationException.class,
                 () -> taskService.updateStatus(task.getId(), request, member));
         assertThat(task.getStatus()).isEqualTo(TaskStatus.IN_REVIEW);
     }
 
     @Test
     void updateStatus_rejectsIllegalColumnSkip() {
-        User assignee = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee); // starts at TODO
         UpdateTaskStatusRequest request = new UpdateTaskStatusRequest(TaskStatus.DONE);
@@ -226,10 +227,10 @@ class TaskServiceTest {
 
     @Test
     void assignTask_requiresManageAccessEvenFromTheCurrentAssignee() {
-        User assignee = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
-        User newAssignee = user(Role.DEVELOPER);
+        User newAssignee = user(Role.TEAM_MEMBER);
         AssignTaskRequest request = new AssignTaskRequest(newAssignee.getId());
 
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
@@ -242,8 +243,8 @@ class TaskServiceTest {
 
     @Test
     void assignTask_unassignsWhenAssigneeIdIsNull() {
-        User assignee = user(Role.DEVELOPER);
-        User manager = user(Role.DEVELOPER);
+        User assignee = user(Role.TEAM_MEMBER);
+        User manager = user(Role.PRODUCER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         AssignTaskRequest request = new AssignTaskRequest(null);
@@ -258,7 +259,7 @@ class TaskServiceTest {
     @Test
     void listTasks_requiresProjectId() {
         TaskFilter filter = new TaskFilter(null, null, null, null, null, null, null);
-        User user = user(Role.DEVELOPER);
+        User user = user(Role.TEAM_MEMBER);
 
         assertThrows(IllegalArgumentException.class,
                 () -> taskService.listTasks(filter, user, org.springframework.data.domain.Pageable.unpaged()));

@@ -48,7 +48,7 @@ class JwtServiceTest {
     void tokenIsInvalidForADifferentUser() {
         User original = buildUser();
         User impersonator = new User(
-                "someone-else@taskflow.io", "hash", "Someone", "Else", Role.DEVELOPER);
+                "someone-else@taskflow.io", "hash", "Someone", "Else", Role.TEAM_MEMBER);
 
         String token = jwtService.generateAccessToken(original);
 
@@ -71,6 +71,6 @@ class JwtServiceTest {
     }
 
     private User buildUser() {
-        return new User("dev@taskflow.io", "hashed-password", "Dev", "User", Role.DEVELOPER);
+        return new User("dev@taskflow.io", "hashed-password", "Dev", "User", Role.TEAM_MEMBER);
     }
 }

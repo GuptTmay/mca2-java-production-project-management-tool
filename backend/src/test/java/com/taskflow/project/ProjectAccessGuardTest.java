@@ -16,9 +16,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,39 +36,38 @@ class ProjectAccessGuardTest {
     }
 
     @Test
-    void requireViewAccess_allowsAdminWithoutAnyLookup() {
-        User admin = user(Role.ADMIN);
-        Project project = project(admin);
+    void requireViewAccess_requiresTeamMembershipForProducers() {
+        User producer = user(Role.PRODUCER);
+        Project project = project(producer);
 
-        assertDoesNotThrow(() -> guard.requireViewAccess(project, admin));
-        verify(projectMemberRepository, never()).existsByProjectIdAndUserId(any(), any());
+        assertDoesNotThrow(() -> guard.requireViewAccess(project, producer));
+        verify(teamAccessGuard).requireMembership(project.getTeam().getId(), producer);
     }
 
     @Test
-    void requireViewAccess_allowsExplicitProjectMember() {
-        User dev = user(Role.DEVELOPER);
-        Project project = project(dev);
-        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), dev.getId())).thenReturn(true);
+    void requireViewAccess_requiresCurrentTeamMembershipEvenForProjectMembers() {
+        User removedMember = user(Role.TEAM_MEMBER);
+        Project project = project(removedMember);
+        doThrow(new ForbiddenOperationException("nope"))
+                .when(teamAccessGuard).requireMembership(project.getTeam().getId(), removedMember);
 
-        assertDoesNotThrow(() -> guard.requireViewAccess(project, dev));
-        verify(teamAccessGuard, never()).requireManageAccess(any(), any());
+        assertThrows(ForbiddenOperationException.class, () -> guard.requireViewAccess(project, removedMember));
+        verify(teamAccessGuard).requireMembership(project.getTeam().getId(), removedMember);
     }
 
     @Test
-    void requireViewAccess_allowsTeamMemberWhoIsNotExplicitProjectMember() {
-        User teamMember = user(Role.DEVELOPER);
+    void requireViewAccess_allowsCurrentTeamMember() {
+        User teamMember = user(Role.TEAM_MEMBER);
         Project project = project(teamMember);
-        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), teamMember.getId())).thenReturn(false);
 
         assertDoesNotThrow(() -> guard.requireViewAccess(project, teamMember));
         verify(teamAccessGuard).requireMembership(project.getTeam().getId(), teamMember);
     }
 
     @Test
-    void requireViewAccess_forbidsUserWhoIsNotAProjectOrTeamMember() {
-        User outsider = user(Role.DEVELOPER);
+    void requireViewAccess_forbidsOutsider() {
+        User outsider = user(Role.TEAM_MEMBER);
         Project project = project(outsider);
-        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), outsider.getId())).thenReturn(false);
         doThrow(new ForbiddenOperationException("nope"))
                 .when(teamAccessGuard).requireMembership(project.getTeam().getId(), outsider);
 
@@ -78,8 +75,18 @@ class ProjectAccessGuardTest {
     }
 
     @Test
+    void isProjectMember_rejectsUsersWhoHaveBeenRemovedFromTheTeam() {
+        User removedMember = user(Role.TEAM_MEMBER);
+        Project project = project(removedMember);
+        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), removedMember.getId())).thenReturn(true);
+        when(teamAccessGuard.isTeamMember(project.getTeam().getId(), removedMember.getId())).thenReturn(false);
+
+        org.junit.jupiter.api.Assertions.assertFalse(guard.isProjectMember(project, removedMember.getId()));
+    }
+
+    @Test
     void requireManageAccess_delegatesToTeamAccessGuard() {
-        User manager = user(Role.DEVELOPER);
+        User manager = user(Role.TEAM_MEMBER);
         Project project = project(manager);
 
         guard.requireManageAccess(project, manager);

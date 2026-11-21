@@ -4,6 +4,7 @@ import com.taskflow.common.exception.ForbiddenOperationException;
 import com.taskflow.common.exception.ResourceNotFoundException;
 import com.taskflow.user.dto.UpdateProfileRequest;
 import com.taskflow.user.dto.UpdateRoleRequest;
+import com.taskflow.user.dto.UpdateUserEnabledRequest;
 import com.taskflow.user.dto.UserResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class UserServiceTest {
 
     @Test
     void getById_allowsUserToViewOwnProfile() {
-        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.DEVELOPER));
+        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.TEAM_MEMBER));
         when(userRepository.findById(self.getId())).thenReturn(Optional.of(self));
         when(userMapper.toResponse(self)).thenReturn(toResponse(self));
 
@@ -49,37 +50,35 @@ class UserServiceTest {
 
     @Test
     void getById_forbidsViewingSomeoneElsesProfile() {
-        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.DEVELOPER));
-        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.DEVELOPER));
+        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.TEAM_MEMBER));
+        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.TEAM_MEMBER));
 
         assertThrows(ForbiddenOperationException.class, () -> userService.getById(other.getId(), self));
     }
 
     @Test
-    void getById_allowsAdminToViewAnyProfile() {
-        User admin = withId(new User("admin@taskflow.io", "hash", "Admin", "User", Role.ADMIN));
-        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.DEVELOPER));
+    void getById_allowsProducerToViewAnotherProfile() {
+        User producer = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.TEAM_MEMBER));
         when(userRepository.findById(other.getId())).thenReturn(Optional.of(other));
         when(userMapper.toResponse(other)).thenReturn(toResponse(other));
 
-        UserResponse response = userService.getById(other.getId(), admin);
-
-        assertThat(response.email()).isEqualTo("other@taskflow.io");
+        UserResponse response = userService.getById(other.getId(), producer);
+        assertThat(response.email()).isEqualTo(other.getEmail());
     }
 
     @Test
-    void getById_throwsNotFound_whenTargetUserMissing() {
-        User admin = withId(new User("admin@taskflow.io", "hash", "Admin", "User", Role.ADMIN));
-        UUID missingId = UUID.randomUUID();
-        when(userRepository.findById(missingId)).thenReturn(Optional.empty());
+    void getById_throwsNotFound_whenOwnUserRecordIsMissing() {
+        User self = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        when(userRepository.findById(self.getId())).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> userService.getById(missingId, admin));
+        assertThrows(ResourceNotFoundException.class, () -> userService.getById(self.getId(), self));
     }
 
     @Test
     void updateProfile_forbidsUpdatingSomeoneElsesProfile() {
-        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.DEVELOPER));
-        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.DEVELOPER));
+        User self = withId(new User("me@taskflow.io", "hash", "Me", "Self", Role.TEAM_MEMBER));
+        User other = withId(new User("other@taskflow.io", "hash", "Other", "Person", Role.TEAM_MEMBER));
         UpdateProfileRequest request = new UpdateProfileRequest("New", "Name");
 
         assertThrows(ForbiddenOperationException.class,
@@ -88,7 +87,7 @@ class UserServiceTest {
 
     @Test
     void updateProfile_updatesOwnFirstAndLastName() {
-        User self = withId(new User("me@taskflow.io", "hash", "Old", "Name", Role.DEVELOPER));
+        User self = withId(new User("me@taskflow.io", "hash", "Old", "Name", Role.TEAM_MEMBER));
         UpdateProfileRequest request = new UpdateProfileRequest("New", "Name");
         when(userRepository.findById(self.getId())).thenReturn(Optional.of(self));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -101,16 +100,54 @@ class UserServiceTest {
     }
 
     @Test
-    void updateRole_changesRoleWithoutSelfAccessRestriction() {
-        User target = withId(new User("dev@taskflow.io", "hash", "Dev", "User", Role.DEVELOPER));
-        UpdateRoleRequest request = new UpdateRoleRequest(Role.PROJECT_MANAGER);
+    void updateProfile_allowsProducerToUpdateAnotherUser() {
+        User producer = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        User target = withId(new User("member@taskflow.io", "hash", "Old", "Name", Role.TEAM_MEMBER));
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
         when(userMapper.toResponse(any())).thenAnswer(inv -> toResponse(inv.getArgument(0)));
 
-        UserResponse response = userService.updateRole(target.getId(), request);
+        UserResponse response = userService.updateProfile(
+                target.getId(), new UpdateProfileRequest("New", "Name"), producer);
 
-        assertThat(response.role()).isEqualTo(Role.PROJECT_MANAGER);
+        assertThat(response.firstName()).isEqualTo("New");
+        assertThat(response.lastName()).isEqualTo("Name");
+    }
+
+    @Test
+    void updateRole_changesRoleWhenCalledByProducer() {
+        User producer = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        User target = withId(new User("dev@taskflow.io", "hash", "Dev", "User", Role.TEAM_MEMBER));
+        UpdateRoleRequest request = new UpdateRoleRequest(Role.PRODUCER);
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toResponse(any())).thenAnswer(inv -> toResponse(inv.getArgument(0)));
+
+        UserResponse response = userService.updateRole(target.getId(), request, producer);
+
+        assertThat(response.role()).isEqualTo(Role.PRODUCER);
+    }
+
+    @Test
+    void updateEnabled_deactivatesUserWhenCalledByProducer() {
+        User producer = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        User target = withId(new User("member@taskflow.io", "hash", "Team", "Member", Role.TEAM_MEMBER));
+        when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userMapper.toResponse(any())).thenAnswer(inv -> toResponse(inv.getArgument(0)));
+
+        UserResponse response = userService.updateEnabled(
+                target.getId(), new UpdateUserEnabledRequest(false), producer);
+
+        assertThat(response.enabled()).isFalse();
+    }
+
+    @Test
+    void updateEnabled_preventsProducerFromDeactivatingTheirOwnAccount() {
+        User producer = withId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+
+        assertThrows(ForbiddenOperationException.class, () -> userService.updateEnabled(
+                producer.getId(), new UpdateUserEnabledRequest(false), producer));
     }
 
     // --- Test helpers ---

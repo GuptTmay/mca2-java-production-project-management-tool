@@ -9,8 +9,10 @@ import type {
   PageResponse,
   Project,
   ProjectDashboard,
+  ProjectFinance,
   ProjectMember,
   ProjectStatus,
+  Role,
   Task,
   TaskHistory,
   TaskPriority,
@@ -23,7 +25,7 @@ import type {
 } from '../lib/types'
 
 export const authApi = {
-  async register(data: { email: string; password: string; firstName: string; lastName: string }) {
+  async register(data: { email: string; password: string; firstName: string; lastName: string; role: Role }) {
     const res = await apiClient.post<AuthResponse>('/auth/register', data)
     setTokens(res.data)
     return res.data
@@ -58,6 +60,9 @@ export const userApi = {
   },
   async updateRole(id: string, role: string) {
     return (await apiClient.patch<UserSummary>(`/users/${id}/role`, { role })).data
+  },
+  async updateEnabled(id: string, enabled: boolean) {
+    return (await apiClient.patch<UserSummary>(`/users/${id}/enabled`, { enabled })).data
   },
 }
 
@@ -95,10 +100,11 @@ export const projectApi = {
   async create(data: {
     teamId: string
     name: string
+    code: string
     description?: string
     status?: ProjectStatus
-    startDate?: string
-    endDate?: string
+    startDate: string
+    endDate: string
   }) {
     return (await apiClient.post<Project>('/projects', data)).data
   },
@@ -112,7 +118,7 @@ export const projectApi = {
   },
   async update(
     id: string,
-    data: { name: string; description?: string; status: ProjectStatus; startDate?: string; endDate?: string },
+    data: { name: string; code: string; description?: string; status: ProjectStatus; startDate: string; endDate: string },
   ) {
     return (await apiClient.patch<Project>(`/projects/${id}`, data)).data
   },
@@ -127,6 +133,21 @@ export const projectApi = {
   },
   async removeMember(id: string, userId: string) {
     await apiClient.delete(`/projects/${id}/members/${userId}`)
+  },
+  async finance(id: string) {
+    return (await apiClient.get<ProjectFinance>(`/projects/${id}/finance`)).data
+  },
+  async updateBudget(id: string, data: { budgetAmount: number; currencyCode: string }) {
+    return (await apiClient.patch<ProjectFinance>(`/projects/${id}/budget`, data)).data
+  },
+  async addExpense(
+    id: string,
+    data: { description: string; category?: string; amount: number; spentOn: string },
+  ) {
+    return (await apiClient.post<ProjectFinance>(`/projects/${id}/expenses`, data)).data
+  },
+  async removeExpense(id: string, expenseId: string) {
+    return (await apiClient.delete<ProjectFinance>(`/projects/${id}/expenses/${expenseId}`)).data
   },
 }
 

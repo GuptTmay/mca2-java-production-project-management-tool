@@ -68,9 +68,11 @@ class ProjectServiceTest {
 
     @Test
     void createProject_requiresTeamManageAccess() {
-        User outsider = withUserId(new User("out@taskflow.io", "hash", "Out", "Sider", Role.DEVELOPER));
+        User outsider = withUserId(new User("out@taskflow.io", "hash", "Out", "Sider", Role.TEAM_MEMBER));
         UUID teamId = UUID.randomUUID();
-        CreateProjectRequest request = new CreateProjectRequest(teamId, "Website Revamp", "desc", null, null, null);
+        CreateProjectRequest request = new CreateProjectRequest(
+                teamId, "Website Revamp", "WEBSITE-1", "desc", null,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
         doThrow(new ForbiddenOperationException("nope"))
                 .when(teamAccessGuard).requireManageAccess(teamId, outsider);
 
@@ -80,9 +82,11 @@ class ProjectServiceTest {
 
     @Test
     void createProject_addsCreatorAsProjectMemberAndDefaultsStatusToPlanning() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
-        CreateProjectRequest request = new CreateProjectRequest(team.getId(), "Website Revamp", "desc", null, null, null);
+        CreateProjectRequest request = new CreateProjectRequest(
+                team.getId(), "Website Revamp", "WEBSITE-1", "desc", null,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
 
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -93,6 +97,7 @@ class ProjectServiceTest {
         ArgumentCaptor<Project> projectCaptor = ArgumentCaptor.forClass(Project.class);
         verify(projectRepository).save(projectCaptor.capture());
         assertThat(projectCaptor.getValue().getStatus()).isEqualTo(ProjectStatus.PLANNING);
+        assertThat(projectCaptor.getValue().getCode()).isEqualTo("WEBSITE-1");
 
         ArgumentCaptor<ProjectMember> memberCaptor = ArgumentCaptor.forClass(ProjectMember.class);
         verify(projectMemberRepository).save(memberCaptor.capture());
@@ -101,18 +106,31 @@ class ProjectServiceTest {
 
     @Test
     void createProject_rejectsEndDateBeforeStartDate() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         UUID teamId = UUID.randomUUID();
         CreateProjectRequest request = new CreateProjectRequest(
-                teamId, "Website Revamp", "desc", null,
+                teamId, "Website Revamp", "WEBSITE-1", "desc", null,
                 LocalDate.of(2026, 6, 1), LocalDate.of(2026, 1, 1));
 
         assertThrows(IllegalArgumentException.class, () -> projectService.createProject(request, owner));
     }
 
     @Test
+    void createProject_rejectsDuplicateCodesCaseInsensitively() {
+        User producer = withUserId(new User("producer@taskflow.io", "hash", "Producer", "User", Role.PRODUCER));
+        UUID teamId = UUID.randomUUID();
+        CreateProjectRequest request = new CreateProjectRequest(
+                teamId, "Short Film", "short-film-01", "desc", null,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2026, 2, 1));
+        when(projectRepository.existsByCode("SHORT-FILM-01")).thenReturn(true);
+
+        assertThrows(DuplicateResourceException.class, () -> projectService.createProject(request, producer));
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
     void getProject_delegatesViewCheckToGuard() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         Project project = withProjectId(new Project(
                 team, "Website Revamp", "desc", ProjectStatus.ACTIVE, null, null, owner));
@@ -127,8 +145,8 @@ class ProjectServiceTest {
 
     @Test
     void getProject_propagatesGuardRejection() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         Project project = withProjectId(new Project(
                 team, "Website Revamp", "desc", ProjectStatus.ACTIVE, null, null, owner));
@@ -142,8 +160,8 @@ class ProjectServiceTest {
 
     @Test
     void addMember_rejectsUserWhoIsNotOnTheTeam() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         Project project = withProjectId(new Project(
                 team, "Website Revamp", "desc", ProjectStatus.ACTIVE, null, null, owner));
@@ -160,9 +178,26 @@ class ProjectServiceTest {
     }
 
     @Test
+    void addMember_rejectsDisabledUser() {
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.PRODUCER));
+        User disabledUser = withUserId(new User("disabled@taskflow.io", "hash", "Disabled", "User", Role.TEAM_MEMBER));
+        disabledUser.setEnabled(false);
+        Team team = withTeamId(new Team("Platform", "desc", owner));
+        Project project = withProjectId(new Project(
+                team, "Website Revamp", "desc", ProjectStatus.ACTIVE, null, null, owner));
+
+        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
+        when(userRepository.findByEmail(disabledUser.getEmail())).thenReturn(Optional.of(disabledUser));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> projectService.addMember(project.getId(), new AddProjectMemberRequest(disabledUser.getEmail()), owner));
+        verify(projectMemberRepository, never()).save(any());
+    }
+
+    @Test
     void addMember_rejectsDuplicateProjectMembership() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User teammate = withUserId(new User("teammate@taskflow.io", "hash", "Team", "Mate", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User teammate = withUserId(new User("teammate@taskflow.io", "hash", "Team", "Mate", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         Project project = withProjectId(new Project(
                 team, "Website Revamp", "desc", ProjectStatus.ACTIVE, null, null, owner));
@@ -207,7 +242,7 @@ class ProjectServiceTest {
 
     private static com.taskflow.project.dto.ProjectResponse dummyResponse() {
         return new com.taskflow.project.dto.ProjectResponse(
-                UUID.randomUUID(), UUID.randomUUID(), "Website Revamp", "desc",
+                UUID.randomUUID(), UUID.randomUUID(), "Website Revamp", "WEBSITE-1", "desc",
                 ProjectStatus.PLANNING, null, null, UUID.randomUUID(),
                 java.time.Instant.now(), java.time.Instant.now());
     }

@@ -2,6 +2,7 @@ package com.taskflow.team;
 
 import com.taskflow.common.dto.PageResponse;
 import com.taskflow.common.exception.DuplicateResourceException;
+import com.taskflow.common.exception.ForbiddenOperationException;
 import com.taskflow.common.exception.ResourceNotFoundException;
 import com.taskflow.team.dto.AddTeamMemberRequest;
 import com.taskflow.team.dto.CreateTeamRequest;
@@ -46,6 +47,7 @@ public class TeamService {
 
     @Transactional
     public TeamResponse createTeam(CreateTeamRequest request, User currentUser) {
+        requireProducer(currentUser);
         Team team = new Team(request.name().trim(), request.description(), currentUser);
         Team saved = teamRepository.save(team);
 
@@ -62,9 +64,7 @@ public class TeamService {
     }
 
     public PageResponse<TeamResponse> listTeams(User currentUser, Pageable pageable) {
-        var page = currentUser.getRole() == Role.ADMIN
-                ? teamRepository.findAll(pageable)
-                : teamRepository.findAllByMemberUserId(currentUser.getId(), pageable);
+        var page = teamRepository.findAllByMemberUserId(currentUser.getId(), pageable);
         return PageResponse.from(page.map(teamMapper::toResponse));
     }
 
@@ -106,8 +106,13 @@ public class TeamService {
             throw new IllegalArgumentException("Only the team owner can assign the Manager role");
         }
 
-        User targetUser = userRepository.findByEmail(request.email())
+        String normalizedEmail = request.email().trim().toLowerCase();
+        User targetUser = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + request.email()));
+
+        if (!targetUser.isEnabled()) {
+            throw new IllegalArgumentException("Disabled users cannot be added to a team");
+        }
 
         if (teamMemberRepository.existsByTeamIdAndUserId(teamId, targetUser.getId())) {
             throw new DuplicateResourceException("This user is already a member of the team");
@@ -165,5 +170,11 @@ public class TeamService {
         return teamMemberRepository.findByTeamIdAndUserId(teamId, userId)
                 .map(member -> member.getTeamRole() == TeamRole.OWNER)
                 .orElse(false);
+    }
+
+    private void requireProducer(User user) {
+        if (user.getRole() != Role.PRODUCER) {
+            throw new ForbiddenOperationException("Only Producers can create teams");
+        }
     }
 }

@@ -9,9 +9,10 @@ import java.time.LocalDate;
 
 public record UpdateProjectRequest(
         @NotBlank @Size(max = 150) String name,
+        @NotBlank @Size(max = 50) String code,
         @Size(max = 2000) String description,
         @NotNull ProjectStatus status,
-        LocalDate startDate,
-        LocalDate endDate
+        @NotNull LocalDate startDate,
+        @NotNull LocalDate endDate
 ) {
 }

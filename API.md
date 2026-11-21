@@ -16,7 +16,7 @@ All errors return an RFC 7807 `ProblemDetail`:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/auth/register` | Every account starts as `DEVELOPER` |
+| POST | `/auth/register` | Body includes `role`: `PRODUCER`, `CONTENT_MANAGER`, or `TEAM_MEMBER` |
 | POST | `/auth/login` | |
 | POST | `/auth/refresh` | Body: `{ refreshToken }` |
 | POST | `/auth/logout` | Stateless — client discards tokens |
@@ -26,62 +26,67 @@ All errors return an RFC 7807 `ProblemDetail`:
 
 | Method | Path | Authorization |
 |---|---|---|
-| GET | `/users/{id}` | Self or ADMIN |
-| PATCH | `/users/{id}` | Self or ADMIN |
-| GET | `/users` | ADMIN only, paginated |
-| PATCH | `/users/{id}/role` | ADMIN only |
+| GET | `/users/{id}` | Self or Producer |
+| PATCH | `/users/{id}` | Self or Producer |
+| GET | `/users` | Producer only, paginated |
+| PATCH | `/users/{id}/role` | Producer only |
+| PATCH | `/users/{id}/enabled` | Producer only; cannot deactivate self |
 
 ## Teams (`/teams`)
 
 | Method | Path | Authorization |
 |---|---|---|
-| POST | `/teams` | Any authenticated user (creator becomes OWNER) |
-| GET | `/teams` | Own teams, or all teams if ADMIN |
-| GET | `/teams/{id}` | Team member or ADMIN |
-| PATCH | `/teams/{id}` | OWNER/MANAGER or ADMIN |
-| DELETE | `/teams/{id}` | OWNER or ADMIN |
-| GET | `/teams/{id}/members` | Team member or ADMIN |
-| POST | `/teams/{id}/members` | OWNER/MANAGER or ADMIN |
-| DELETE | `/teams/{id}/members/{userId}` | OWNER/MANAGER or ADMIN (cannot remove the last OWNER) |
-| PATCH | `/teams/{id}/members/{userId}/role` | OWNER or ADMIN (cannot demote the last OWNER) |
+| POST | `/teams` | Producer only (creator becomes OWNER) |
+| GET | `/teams` | Teams the current user belongs to |
+| GET | `/teams/{id}` | Team member |
+| PATCH | `/teams/{id}` | Producer team OWNER/MANAGER |
+| DELETE | `/teams/{id}` | Producer team OWNER |
+| GET | `/teams/{id}/members` | Team member |
+| POST | `/teams/{id}/members` | Producer team OWNER/MANAGER |
+| DELETE | `/teams/{id}/members/{userId}` | Producer team OWNER/MANAGER (cannot remove the OWNER) |
+| PATCH | `/teams/{id}/members/{userId}/role` | Producer team OWNER |
 
 ## Projects (`/projects`)
 
 | Method | Path | Authorization |
 |---|---|---|
-| POST | `/projects` | Team OWNER/MANAGER or ADMIN |
-| GET | `/projects?teamId=&status=` | Team member or ADMIN |
-| GET | `/projects/{id}` | Project member, team OWNER/MANAGER, or ADMIN |
-| PATCH | `/projects/{id}` | Team OWNER/MANAGER or ADMIN |
-| DELETE | `/projects/{id}` | Team OWNER/MANAGER or ADMIN |
-| GET | `/projects/{id}/members` | Project member, team OWNER/MANAGER, or ADMIN |
-| POST | `/projects/{id}/members` | Team OWNER/MANAGER or ADMIN (target must already be a team member) |
-| DELETE | `/projects/{id}/members/{userId}` | Team OWNER/MANAGER or ADMIN |
+| POST | `/projects` | Producer team OWNER/MANAGER; requires unique code and start/end dates |
+| GET | `/projects?teamId=&status=` | Team member |
+| GET | `/projects/{id}` | Project member or team member |
+| PATCH | `/projects/{id}` | Producer team OWNER/MANAGER |
+| DELETE | `/projects/{id}` | Producer team OWNER/MANAGER |
+| GET | `/projects/{id}/members` | Project member or team member |
+| POST | `/projects/{id}/members` | Producer team OWNER/MANAGER (target must already be a team member) |
+| DELETE | `/projects/{id}/members/{userId}` | Producer team OWNER/MANAGER |
+| GET | `/projects/{id}/finance` | Producer or Content Manager with project access |
+| PATCH | `/projects/{id}/budget` | Producer team OWNER/MANAGER |
+| POST | `/projects/{id}/expenses` | Producer team OWNER/MANAGER |
+| DELETE | `/projects/{id}/expenses/{expenseId}` | Producer team OWNER/MANAGER |
 
 ## Tasks (`/tasks`)
 
 | Method | Path | Authorization |
 |---|---|---|
-| POST | `/tasks` | Project member, team manager, or ADMIN |
-| GET | `/tasks?projectId=&status=&priority=&assigneeId=&deadlineFrom=&deadlineTo=&search=` | Same as above |
-| GET | `/tasks/board?projectId=` | Same as above (grouped client-side by status) |
-| GET | `/tasks/{id}` | Same as above |
-| PATCH | `/tasks/{id}` | The task's assignee, team OWNER/MANAGER, or ADMIN |
-| PATCH | `/tasks/{id}/status` | Any project member, team manager, or ADMIN — validates the column move is adjacent |
-| PATCH | `/tasks/{id}/assign` | Team OWNER/MANAGER or ADMIN only (not the current assignee) |
-| DELETE | `/tasks/{id}` | Team OWNER/MANAGER or ADMIN |
+| POST | `/tasks` | Producer team OWNER/MANAGER |
+| GET | `/tasks?projectId=&status=&priority=&assigneeId=&deadlineFrom=&deadlineTo=&search=` | Project or team member |
+| GET | `/tasks/board?projectId=` | Project or team member (grouped client-side by status) |
+| GET | `/tasks/{id}` | Project or team member |
+| PATCH | `/tasks/{id}` | Producer team OWNER/MANAGER |
+| PATCH | `/tasks/{id}/status` | Producer can move adjacent columns; Content Manager can review; Team Member can update assigned tasks through `IN_REVIEW` |
+| PATCH | `/tasks/{id}/assign` | Producer team OWNER/MANAGER only |
+| DELETE | `/tasks/{id}` | Producer team OWNER/MANAGER |
 | POST/DELETE | `/tasks/{id}/labels/{labelId}` | Same as PATCH `/tasks/{id}` |
 
 ## Labels (`/labels`)
 
 | Method | Path | Authorization |
 |---|---|---|
-| POST | `/labels` | ADMIN or PROJECT_MANAGER |
+| POST | `/labels` | Producer |
 | GET | `/labels` | Any authenticated user |
 
 ## Dashboard
 
 | Method | Path | Authorization |
 |---|---|---|
-| GET | `/projects/{id}/dashboard` | Project member, team manager, or ADMIN |
+| GET | `/projects/{id}/dashboard` | Project member or team member |
 | GET | `/dashboard/my-tasks` | Any authenticated user (their own assigned tasks) |

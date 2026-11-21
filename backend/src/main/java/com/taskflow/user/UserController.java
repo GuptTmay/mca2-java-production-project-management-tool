@@ -3,6 +3,7 @@ package com.taskflow.user;
 import com.taskflow.common.dto.PageResponse;
 import com.taskflow.user.dto.UpdateProfileRequest;
 import com.taskflow.user.dto.UpdateRoleRequest;
+import com.taskflow.user.dto.UpdateUserEnabledRequest;
 import com.taskflow.user.dto.UserResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -42,14 +43,26 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('PRODUCER')")
     public PageResponse<UserResponse> list(@PageableDefault(size = 20) Pageable pageable) {
         return userService.listUsers(pageable);
     }
 
     @PatchMapping("/{id}/role")
-    @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse updateRole(@PathVariable UUID id, @Valid @RequestBody UpdateRoleRequest request) {
-        return userService.updateRole(id, request);
+    @PreAuthorize("hasRole('PRODUCER')")
+    public UserResponse updateRole(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateRoleRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        return userService.updateRole(id, request, currentUser);
+    }
+
+    @PatchMapping("/{id}/enabled")
+    @PreAuthorize("hasRole('PRODUCER')")
+    public UserResponse updateEnabled(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserEnabledRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        return userService.updateEnabled(id, request, currentUser);
     }
 }

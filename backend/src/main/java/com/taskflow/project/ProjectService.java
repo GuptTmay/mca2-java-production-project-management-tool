@@ -11,7 +11,6 @@ import com.taskflow.project.dto.UpdateProjectRequest;
 import com.taskflow.team.Team;
 import com.taskflow.team.TeamAccessGuard;
 import com.taskflow.team.TeamRepository;
-import com.taskflow.user.Role;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import org.springframework.data.domain.Page;
@@ -56,8 +55,12 @@ public class ProjectService {
     @Transactional
     public ProjectResponse createProject(CreateProjectRequest request, User currentUser) {
         validateDateRange(request.startDate(), request.endDate());
-
         teamAccessGuard.requireManageAccess(request.teamId(), currentUser);
+
+        String code = request.code().trim().toUpperCase();
+        if (projectRepository.existsByCode(code)) {
+            throw new DuplicateResourceException("A project with this code already exists");
+        }
 
         Team team = teamRepository.findById(request.teamId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Team", request.teamId()));
@@ -65,6 +68,7 @@ public class ProjectService {
         Project project = new Project(
                 team,
                 request.name().trim(),
+                code,
                 request.description(),
                 request.status() != null ? request.status() : ProjectStatus.PLANNING,
                 request.startDate(),
@@ -102,8 +106,13 @@ public class ProjectService {
         projectAccessGuard.requireManageAccess(project, currentUser);
 
         validateDateRange(request.startDate(), request.endDate());
+        String code = request.code().trim().toUpperCase();
+        if (projectRepository.existsByCodeAndIdNot(code, projectId)) {
+            throw new DuplicateResourceException("A project with this code already exists");
+        }
 
         project.setName(request.name().trim());
+        project.setCode(code);
         project.setDescription(request.description());
         project.setStatus(request.status());
         project.setStartDate(request.startDate());
@@ -132,8 +141,13 @@ public class ProjectService {
         Project project = findProjectOrThrow(projectId);
         projectAccessGuard.requireManageAccess(project, currentUser);
 
-        User targetUser = userRepository.findByEmail(request.email())
+        String normalizedEmail = request.email().trim().toLowerCase();
+        User targetUser = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + request.email()));
+
+        if (!targetUser.isEnabled()) {
+            throw new IllegalArgumentException("Disabled users cannot be added to a project");
+        }
 
         // A project member must already belong to the project's team - a project
         // can never have members the team itself doesn't recognize.

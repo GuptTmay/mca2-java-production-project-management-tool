@@ -60,7 +60,7 @@ class TeamServiceTest {
 
     @Test
     void createTeam_savesCreatorAsOwner() {
-        User creator = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User creator = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.PRODUCER));
         Team savedTeam = withTeamId(new Team("Platform", "desc", creator));
         when(teamRepository.save(any(Team.class))).thenReturn(savedTeam);
         when(teamMapper.toResponse(savedTeam)).thenReturn(dummyTeamResponse(savedTeam));
@@ -75,7 +75,7 @@ class TeamServiceTest {
 
     @Test
     void getTeam_returnsTeam_whenGuardGrantsAccess() {
-        User member = withUserId(new User("member@taskflow.io", "hash", "Member", "User", Role.DEVELOPER));
+        User member = withUserId(new User("member@taskflow.io", "hash", "Member", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", member));
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(teamMapper.toResponse(team)).thenReturn(dummyTeamResponse(team));
@@ -88,8 +88,8 @@ class TeamServiceTest {
 
     @Test
     void getTeam_propagatesGuardRejection() {
-        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.DEVELOPER));
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User outsider = withUserId(new User("outsider@taskflow.io", "hash", "Out", "Sider", Role.TEAM_MEMBER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         org.mockito.Mockito.doThrow(new com.taskflow.common.exception.ForbiddenOperationException("nope"))
@@ -101,9 +101,9 @@ class TeamServiceTest {
 
     @Test
     void addMember_throwsDuplicateWhenUserAlreadyOnTeam() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
-        User newUser = withUserId(new User("new@taskflow.io", "hash", "New", "User", Role.DEVELOPER));
+        User newUser = withUserId(new User("new@taskflow.io", "hash", "New", "User", Role.TEAM_MEMBER));
 
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
         when(userRepository.findByEmail(newUser.getEmail())).thenReturn(Optional.of(newUser));
@@ -116,8 +116,36 @@ class TeamServiceTest {
     }
 
     @Test
+    void addMember_normalizesEmailBeforeLookingUpUser() {
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.PRODUCER));
+        Team team = withTeamId(new Team("Platform", "desc", owner));
+        User newUser = withUserId(new User("new@taskflow.io", "hash", "New", "User", Role.TEAM_MEMBER));
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+        when(userRepository.findByEmail(newUser.getEmail())).thenReturn(Optional.of(newUser));
+
+        teamService.addMember(team.getId(), new AddTeamMemberRequest("  NEW@TASKFLOW.IO ", TeamRole.MEMBER), owner);
+
+        verify(userRepository).findByEmail(newUser.getEmail());
+    }
+
+    @Test
+    void addMember_rejectsDisabledUser() {
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.PRODUCER));
+        Team team = withTeamId(new Team("Platform", "desc", owner));
+        User disabledUser = withUserId(new User("disabled@taskflow.io", "hash", "Disabled", "User", Role.TEAM_MEMBER));
+        disabledUser.setEnabled(false);
+
+        when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
+        when(userRepository.findByEmail(disabledUser.getEmail())).thenReturn(Optional.of(disabledUser));
+
+        assertThrows(IllegalArgumentException.class, () -> teamService.addMember(
+                team.getId(), new AddTeamMemberRequest(disabledUser.getEmail(), TeamRole.MEMBER), owner));
+        org.mockito.Mockito.verify(teamMemberRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
     void removeMember_preventsRemovingOwner() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         TeamMember ownership = new TeamMember(team, owner, TeamRole.OWNER);
 
@@ -131,8 +159,8 @@ class TeamServiceTest {
 
     @Test
     void removeMember_preventsManagerFromRemovingManager() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         TeamMember ownership = new TeamMember(team, owner, TeamRole.OWNER);
         TeamMember managerMembership = new TeamMember(team, manager, TeamRole.MANAGER);
@@ -150,10 +178,10 @@ class TeamServiceTest {
 
     @Test
     void addMember_preventsManagerFromAssigningManagerRole() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
-        User newUser = withUserId(new User("new@taskflow.io", "hash", "New", "User", Role.DEVELOPER));
+        User newUser = withUserId(new User("new@taskflow.io", "hash", "New", "User", Role.TEAM_MEMBER));
         TeamMember managerMembership = new TeamMember(team, manager, TeamRole.MANAGER);
 
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
@@ -168,8 +196,8 @@ class TeamServiceTest {
 
     @Test
     void updateTeam_requiresOwnerAccess() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
-        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
+        User manager = withUserId(new User("manager@taskflow.io", "hash", "Manager", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         TeamMember managerMembership = new TeamMember(team, manager, TeamRole.MANAGER);
 
@@ -182,7 +210,7 @@ class TeamServiceTest {
     }
     @Test
     void updateMemberRole_preventsDemotingTheLastOwner() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         TeamMember ownership = new TeamMember(team, owner, TeamRole.OWNER);
 
@@ -199,7 +227,7 @@ class TeamServiceTest {
 
     @Test
     void listMembers_returnsMappedMembers() {
-        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.DEVELOPER));
+        User owner = withUserId(new User("owner@taskflow.io", "hash", "Owner", "User", Role.TEAM_MEMBER));
         Team team = withTeamId(new Team("Platform", "desc", owner));
         TeamMember ownership = new TeamMember(team, owner, TeamRole.OWNER);
 

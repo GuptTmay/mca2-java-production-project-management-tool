@@ -43,6 +43,7 @@ export function ProjectsPage() {
   const [showForm, setShowForm] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [name, setName] = useState('')
+  const [code, setCode] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState<ProjectStatus>('PLANNING')
   const [startDate, setStartDate] = useState('')
@@ -73,7 +74,7 @@ export function ProjectsPage() {
     })),
   })
   const creatableTeams = teams.filter((_, index) =>
-    user?.role === 'ADMIN' || teamMembersQueries[index]?.data?.some(
+    user?.role === 'PRODUCER' && teamMembersQueries[index]?.data?.some(
       (member) => member.userId === user?.id && (member.teamRole === 'OWNER' || member.teamRole === 'MANAGER'),
     ),
   )
@@ -94,14 +95,16 @@ export function ProjectsPage() {
       projectApi.create({
         teamId,
         name: name.trim(),
+        code: code.trim().toUpperCase(),
         description: description.trim() || undefined,
         status,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
+        startDate,
+        endDate,
       }),
     onSuccess: () => {
       toast.success('Project created')
       setName('')
+      setCode('')
       setDescription('')
       setTeamId('')
       setStatus('PLANNING')
@@ -119,7 +122,7 @@ export function ProjectsPage() {
     const team = teamsById.get(project.teamId)
     const matchesSearch =
       !normalizedSearch ||
-      [project.name, project.description, team?.name]
+      [project.name, project.code, project.description, team?.name]
         .some((value) => value?.toLocaleLowerCase().includes(normalizedSearch) ?? false)
     return matchesSearch && (statusFilter === 'ALL' || project.status === statusFilter)
   })
@@ -133,7 +136,7 @@ export function ProjectsPage() {
         title="Projects"
         description="A clear view of your team's work, priorities, and progress."
         action={
-          (teamAccessLoading || teamAccessError || creatableTeams.length > 0) && (
+          user?.role === 'PRODUCER' && (teamAccessLoading || teamAccessError || creatableTeams.length > 0) && (
             <Button onClick={() => setShowForm((value) => !value)} aria-expanded={showForm}>
               {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               {showForm ? 'Close' : 'New project'}
@@ -178,6 +181,15 @@ export function ProjectsPage() {
                     required
                   />
                 </Field>
+                <Field label="Project code">
+                  <Input
+                    value={code}
+                    onChange={(event) => setCode(event.target.value.toUpperCase())}
+                    placeholder="e.g. FILM-2026-01"
+                    maxLength={50}
+                    required
+                  />
+                </Field>
                 <Field label="Team">
                   <select
                     className="glass-input"
@@ -213,7 +225,7 @@ export function ProjectsPage() {
                   </select>
                 </Field>
                 <Field label="Start date">
-                  <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required />
                 </Field>
                 <Field label="Due date">
                   <Input
@@ -221,6 +233,7 @@ export function ProjectsPage() {
                     value={endDate}
                     min={startDate || undefined}
                     onChange={(event) => setEndDate(event.target.value)}
+                    required
                   />
                 </Field>
               </div>
@@ -342,7 +355,7 @@ export function ProjectsPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-surface-100 pt-4 text-xs text-surface-500 dark:border-surface-800 dark:text-surface-400">
                     <span className="flex min-w-0 items-center gap-1.5 truncate">
                       <Users className="h-3.5 w-3.5 shrink-0" />
-                      {team?.name ?? 'Unknown team'}
+                      {project.code} · {team?.name ?? 'Unknown team'}
                     </span>
                     {project.endDate && (
                       <span className="flex items-center gap-1.5">

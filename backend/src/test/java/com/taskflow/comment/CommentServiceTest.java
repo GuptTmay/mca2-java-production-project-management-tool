@@ -59,7 +59,7 @@ class CommentServiceTest {
 
     @Test
     void listComments_requiresProjectViewAccess() {
-        User outsider = user(Role.DEVELOPER);
+        User outsider = user(Role.TEAM_MEMBER);
         Task task = task(outsider);
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
         doThrow(new ForbiddenOperationException("nope"))
@@ -72,7 +72,7 @@ class CommentServiceTest {
 
     @Test
     void createComment_recordsActivity() {
-        User author = user(Role.DEVELOPER);
+        User author = user(Role.TEAM_MEMBER);
         Task task = task(author);
         CommentRequest request = new CommentRequest("Nice work!");
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
@@ -88,8 +88,8 @@ class CommentServiceTest {
 
     @Test
     void updateComment_allowsOnlyAuthor() {
-        User author = user(Role.DEVELOPER);
-        User other = user(Role.DEVELOPER);
+        User author = user(Role.TEAM_MEMBER);
+        User other = user(Role.TEAM_MEMBER);
         Task task = task(author);
         Comment comment = comment(task, author);
         CommentRequest request = new CommentRequest("Updated");
@@ -102,9 +102,24 @@ class CommentServiceTest {
     }
 
     @Test
+    void updateComment_rejectsCommentFromDifferentTask() {
+        User author = user(Role.TEAM_MEMBER);
+        Task routeTask = task(author);
+        Task commentTask = task(author);
+        Comment comment = comment(commentTask, author);
+
+        when(taskRepository.findById(routeTask.getId())).thenReturn(Optional.of(routeTask));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        assertThrows(ResourceNotFoundException.class, () -> commentService.updateComment(
+                routeTask.getId(), comment.getId(), new CommentRequest("Updated"), author));
+        assertThat(comment.getContent()).isEqualTo("Hello");
+    }
+
+    @Test
     void deleteComment_allowsManager() {
-        User author = user(Role.DEVELOPER);
-        User manager = user(Role.PROJECT_MANAGER);
+        User author = user(Role.TEAM_MEMBER);
+        User manager = user(Role.PRODUCER);
         Task task = task(author);
         Comment comment = comment(task, author);
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
@@ -113,6 +128,39 @@ class CommentServiceTest {
         commentService.deleteComment(task.getId(), comment.getId(), manager);
 
         verify(commentRepository).delete(comment);
+    }
+
+    @Test
+    void deleteComment_rejectsCommentFromDifferentTask() {
+        User producer = user(Role.PRODUCER);
+        User author = user(Role.TEAM_MEMBER);
+        Task routeTask = task(producer);
+        Task commentTask = task(author);
+        Comment comment = comment(commentTask, author);
+
+        when(taskRepository.findById(routeTask.getId())).thenReturn(Optional.of(routeTask));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> commentService.deleteComment(routeTask.getId(), comment.getId(), producer));
+        verify(commentRepository, never()).delete(any(Comment.class));
+    }
+
+    @Test
+    void deleteComment_requiresManageAccessForNonAuthors() {
+        User author = user(Role.TEAM_MEMBER);
+        User producerWithoutTeamManageAccess = user(Role.PRODUCER);
+        Task task = task(author);
+        Comment comment = comment(task, author);
+
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        when(commentRepository.findById(comment.getId())).thenReturn(Optional.of(comment));
+        doThrow(new ForbiddenOperationException("nope"))
+                .when(projectAccessGuard).requireManageAccess(task.getProject(), producerWithoutTeamManageAccess);
+
+        assertThrows(ForbiddenOperationException.class, () -> commentService.deleteComment(
+                task.getId(), comment.getId(), producerWithoutTeamManageAccess));
+        verify(commentRepository, never()).delete(any(Comment.class));
     }
 
     // --- Helpers ---

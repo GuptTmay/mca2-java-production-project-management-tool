@@ -13,7 +13,8 @@ import { Avatar } from '../../components/Avatar'
 import { KanbanBoard } from '../board/KanbanBoard'
 import { TaskDrawer } from '../board/TaskDrawer'
 import { ActivityTimeline } from '../activities/ActivityTimeline'
-import { PROJECT_STATUS_LABELS, type ProjectStatus, type Task, type TeamRole } from '../../lib/types'
+import { PROJECT_STATUS_LABELS, type ProjectStatus, type Task } from '../../lib/types'
+import { ProjectFinanceSection } from './ProjectFinanceSection'
 
 const PROJECT_STATUSES: ProjectStatus[] = ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED']
 
@@ -27,6 +28,7 @@ export function ProjectDetailPage() {
   const [memberEmail, setMemberEmail] = useState('')
   const [isEditingProject, setIsEditingProject] = useState(false)
   const [editName, setEditName] = useState('')
+  const [editCode, setEditCode] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editStatus, setEditStatus] = useState<ProjectStatus>('PLANNING')
   const [editStartDate, setEditStartDate] = useState('')
@@ -59,7 +61,7 @@ export function ProjectDetailPage() {
   const currentUserTeamRole = teamMembersQuery.data?.find(m => m.userId === user?.id)?.teamRole
   const isOwner = currentUserTeamRole === 'OWNER'
   const isManager = currentUserTeamRole === 'MANAGER'
-  const canManage = isOwner || isManager
+  const canManage = user?.role === 'PRODUCER' && (isOwner || isManager)
 
   // Open task drawer from global New Task button or ?newTask=true nav, but only if user can manage
   useEffect(() => {
@@ -95,10 +97,11 @@ export function ProjectDetailPage() {
     mutationFn: () =>
       projectApi.update(projectId!, {
         name: editName.trim(),
+        code: editCode.trim().toUpperCase(),
         description: editDescription.trim() || undefined,
         status: editStatus,
-        startDate: editStartDate || undefined,
-        endDate: editEndDate || undefined,
+        startDate: editStartDate,
+        endDate: editEndDate,
       }),
     onSuccess: () => {
       toast.success('Project updated')
@@ -137,7 +140,7 @@ export function ProjectDetailPage() {
     <div className="w-full min-w-0 max-w-full space-y-6 animate-fade-in">
       <PageHeader
         title={project.name}
-        description={project.description || 'No description provided'}
+        description={`${project.code} · ${project.description || 'No description provided'}`}
         action={
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {currentUserTeamRole && (
@@ -151,6 +154,7 @@ export function ProjectDetailPage() {
                 variant="secondary"
                 onClick={() => {
                   setEditName(project.name)
+                  setEditCode(project.code)
                   setEditDescription(project.description || '')
                   setEditStatus(project.status)
                   setEditStartDate(project.startDate || '')
@@ -191,6 +195,9 @@ export function ProjectDetailPage() {
               <Field label="Project name">
                 <Input value={editName} onChange={(event) => setEditName(event.target.value)} required maxLength={150} />
               </Field>
+              <Field label="Project code">
+                <Input value={editCode} onChange={(event) => setEditCode(event.target.value.toUpperCase())} required maxLength={50} />
+              </Field>
               <Field label="Status">
                 <select
                   className="glass-input"
@@ -212,7 +219,7 @@ export function ProjectDetailPage() {
                 />
               </Field>
               <Field label="Start date">
-                <Input type="date" value={editStartDate} onChange={(event) => setEditStartDate(event.target.value)} />
+                <Input type="date" value={editStartDate} onChange={(event) => setEditStartDate(event.target.value)} required />
               </Field>
               <Field label="Due date">
                 <Input
@@ -220,6 +227,7 @@ export function ProjectDetailPage() {
                   value={editEndDate}
                   min={editStartDate || undefined}
                   onChange={(event) => setEditEndDate(event.target.value)}
+                  required
                 />
               </Field>
             </div>
@@ -366,11 +374,16 @@ export function ProjectDetailPage() {
           <KanbanBoard
             projectId={projectId}
             onTaskClick={openEditModal}
-            canChangeStatus={canManage || user?.role === 'ADMIN' || currentUserTeamRole === 'MEMBER'}
-            userRole={(currentUserTeamRole as TeamRole) || (user?.role === 'ADMIN' ? 'OWNER' : 'MEMBER')}
+            canChangeStatus={!!user}
+            userRole={user?.role}
+            currentUserId={user?.id}
           />
         </div>
       </div>
+
+      {user && (user.role === 'PRODUCER' || user.role === 'CONTENT_MANAGER') && (
+        <ProjectFinanceSection projectId={projectId} canManage={canManage} />
+      )}
 
       {/* Activity Timeline */}
       <div className="w-full min-w-0">

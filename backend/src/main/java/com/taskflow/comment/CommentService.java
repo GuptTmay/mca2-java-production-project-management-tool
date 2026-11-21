@@ -9,7 +9,6 @@ import com.taskflow.comment.dto.CommentResponse;
 import com.taskflow.project.ProjectAccessGuard;
 import com.taskflow.task.Task;
 import com.taskflow.task.TaskRepository;
-import com.taskflow.user.Role;
 import com.taskflow.user.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,8 +63,7 @@ public class CommentService {
         Task task = findTaskOrThrow(taskId);
         projectAccessGuard.requireViewAccess(task.getProject(), currentUser);
 
-        Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Comment", commentId));
+        Comment comment = findCommentForTaskOrThrow(taskId, commentId);
 
         if (!comment.getUser().getId().equals(currentUser.getId())) {
             throw new ForbiddenOperationException("Only the comment author can edit this comment");
@@ -80,16 +78,13 @@ public class CommentService {
         Task task = findTaskOrThrow(taskId);
         projectAccessGuard.requireViewAccess(task.getProject(), currentUser);
 
-        Comment comment = commentRepository.findById(commentId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Comment", commentId));
+        Comment comment = findCommentForTaskOrThrow(taskId, commentId);
 
         if (!comment.getUser().getId().equals(currentUser.getId())) {
-            if (currentUser.getRole() != Role.ADMIN) {
-                try {
-                    projectAccessGuard.requireManageAccess(task.getProject(), currentUser);
-                } catch (ForbiddenOperationException ex) {
-                    throw new ForbiddenOperationException("Only the comment author or a team manager can delete this comment");
-                }
+            try {
+                projectAccessGuard.requireManageAccess(task.getProject(), currentUser);
+            } catch (ForbiddenOperationException ex) {
+                throw new ForbiddenOperationException("Only the comment author or an authorized Producer can delete this comment");
             }
         }
 
@@ -99,5 +94,14 @@ public class CommentService {
     private Task findTaskOrThrow(UUID taskId) {
         return taskRepository.findById(taskId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Task", taskId));
+    }
+
+    private Comment findCommentForTaskOrThrow(UUID taskId, UUID commentId) {
+        Comment comment = commentRepository.findById(commentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Comment", commentId));
+        if (!comment.getTask().getId().equals(taskId)) {
+            throw ResourceNotFoundException.of("Comment", commentId);
+        }
+        return comment;
     }
 }

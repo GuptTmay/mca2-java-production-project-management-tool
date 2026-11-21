@@ -7,12 +7,21 @@ import { KanbanSquare, UserPlus, Sparkles } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { Button, Card, ErrorBanner, Field, Input } from '../../components/ui'
 import { extractErrorMessage } from '../../api/client'
+import type { Role } from '../../lib/types'
+
+const REGISTRABLE_ROLES: Role[] = ['PRODUCER', 'CONTENT_MANAGER', 'TEAM_MEMBER']
+const ROLE_LABELS: Record<Role, string> = {
+  PRODUCER: 'Producer',
+  CONTENT_MANAGER: 'Content Manager',
+  TEAM_MEMBER: 'Team Member',
+}
 
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
   email: z.string().email('Enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['PRODUCER', 'CONTENT_MANAGER', 'TEAM_MEMBER']),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -94,6 +103,13 @@ export function RegisterPage() {
               </div>
               <Field label="Email" error={errors.email?.message}>
                 <Input type="email" autoComplete="email" {...register('email')} />
+              </Field>
+              <Field label="Role" error={errors.role?.message}>
+                <select className="glass-input" defaultValue="TEAM_MEMBER" {...register('role')}>
+                  {REGISTRABLE_ROLES.map((role) => (
+                    <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                  ))}
+                </select>
               </Field>
               <Field label="Password" error={errors.password?.message}>
                 <Input type="password" autoComplete="new-password" {...register('password')} />

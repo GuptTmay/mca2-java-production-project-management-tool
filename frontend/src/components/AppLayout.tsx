@@ -89,7 +89,8 @@ export default function AppLayout() {
   })
 
   const currentUserTeamRole: TeamRole | undefined = membersQuery.data?.find(m => m.userId === user?.id)?.teamRole
-  const canCreateTask = currentUserTeamRole === 'OWNER' || currentUserTeamRole === 'MANAGER'
+  const canCreateTask = user?.role === 'PRODUCER'
+    && (currentUserTeamRole === 'OWNER' || currentUserTeamRole === 'MANAGER')
 
   const projectsQuery = useQuery({
     queryKey: ['projects', activeTeam?.id],
@@ -177,9 +178,23 @@ export default function AppLayout() {
                 <span className={clsx(sidebarCollapsed && 'lg:hidden')}>{item.label}</span>
               </NavLink>
             ))}
+            {user?.role === 'PRODUCER' && (
+              <NavLink
+                to="/admin/users"
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) => clsx(
+                  'nav-item',
+                  sidebarCollapsed && 'lg:justify-center lg:px-0',
+                  isActive ? 'nav-item-active' : 'nav-item-inactive',
+                )}
+              >
+                <Users className="h-4.5 w-4.5 flex-shrink-0" />
+                <span className={clsx(sidebarCollapsed && 'lg:hidden')}>User management</span>
+              </NavLink>
+            )}
           </nav>
 
-          <div className={clsx('px-4 pb-3', sidebarCollapsed && 'lg:px-3')}>
+          {user?.role === 'PRODUCER' && <div className={clsx('px-4 pb-3', sidebarCollapsed && 'lg:px-3')}>
             <button
               type="button"
               onClick={() => {
@@ -197,7 +212,7 @@ export default function AppLayout() {
               <Plus className="h-4 w-4 shrink-0" />
               <span className={clsx(sidebarCollapsed && 'lg:hidden')}>Create project</span>
             </button>
-          </div>
+          </div>}
 
           {/* User Section */}
           <div className={clsx(

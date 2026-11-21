@@ -20,6 +20,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -39,6 +40,9 @@ public class Project {
     @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false, unique = true, length = 50)
+    private String code;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -46,11 +50,17 @@ public class Project {
     @Column(nullable = false)
     private ProjectStatus status;
 
-    @Column(name = "start_date")
+    @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
-    @Column(name = "end_date")
+    @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
+
+    @Column(name = "budget_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal budgetAmount = BigDecimal.ZERO;
+
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode = "USD";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "created_by", nullable = false, updatable = false)
@@ -70,8 +80,14 @@ public class Project {
 
     public Project(Team team, String name, String description, ProjectStatus status,
                     LocalDate startDate, LocalDate endDate, User createdBy) {
+        this(team, name, null, description, status, startDate, endDate, createdBy);
+    }
+
+    public Project(Team team, String name, String code, String description, ProjectStatus status,
+                   LocalDate startDate, LocalDate endDate, User createdBy) {
         this.team = team;
         this.name = name;
+        this.code = code;
         this.description = description;
         this.status = status;
         this.startDate = startDate;
@@ -91,8 +107,16 @@ public class Project {
         return name;
     }
 
+    public String getCode() {
+        return code;
+    }
+
     public void setName(String name) {
         this.name = name;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getDescription() {
@@ -125,6 +149,22 @@ public class Project {
 
     public void setEndDate(LocalDate endDate) {
         this.endDate = endDate;
+    }
+
+    public BigDecimal getBudgetAmount() {
+        return budgetAmount;
+    }
+
+    public void setBudgetAmount(BigDecimal budgetAmount) {
+        this.budgetAmount = budgetAmount;
+    }
+
+    public String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    public void setCurrencyCode(String currencyCode) {
+        this.currencyCode = currencyCode;
     }
 
     public User getCreatedBy() {

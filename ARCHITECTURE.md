@@ -35,6 +35,7 @@ erDiagram
     PROJECTS ||--o{ PROJECT_MEMBERS : has
     USERS ||--o{ PROJECT_MEMBERS : has
     PROJECTS ||--o{ TASKS : contains
+    PROJECTS ||--o{ PROJECT_EXPENSES : tracks
     USERS ||--o{ TASKS : "assigned to"
     USERS ||--o{ TASKS : "reported by"
     TASKS }o--o{ LABELS : tagged
@@ -59,7 +60,17 @@ erDiagram
     PROJECTS {
         uuid id PK
         uuid team_id FK
+        string code UK
+        decimal budget_amount
+        string currency_code
         string status
+    }
+    PROJECT_EXPENSES {
+        uuid id PK
+        uuid project_id FK
+        uuid created_by FK
+        decimal amount
+        date spent_on
     }
     PROJECT_MEMBERS {
         uuid id PK
@@ -81,26 +92,22 @@ erDiagram
     }
 ```
 
-`comments`, `notifications`, and `activities` are intentionally absent — they ship as additive `V2`/`V3`/`V4` migrations only if the optional phase is built (see §5).
+Comments, notifications, activities, project budgets and expenses are additive Flyway migrations.
 
 ## 3. Use case diagram
 
 ```mermaid
 flowchart LR
-    Admin([Admin])
-    Manager([Project Manager / Team Owner])
-    Dev([Developer])
+    Producer([Producer])
+    ContentManager([Content Manager])
+    TeamMember([Team Member])
 
-    Admin --> UC1[Manage any user's role]
-    Admin --> UC2[Full access to all teams/projects]
-    Manager --> UC3[Manage team membership]
-    Manager --> UC4[Create/update/delete projects]
-    Manager --> UC5[Assign tasks]
-    Dev --> UC6[Move own tasks on the Kanban board]
-    Dev --> UC7[Edit tasks assigned to them]
-    Dev --> UC8[Filter/search tasks]
-    Manager --> UC6
-    Manager --> UC8
+    Producer --> UC1[Manage users, teams, projects, tasks and project finances]
+    Producer --> UC2[Assign tasks and review status]
+    ContentManager --> UC3[Monitor projects and review tasks]
+    TeamMember --> UC4[Update assigned tasks and add progress comments]
+    ContentManager --> UC5[Track project progress]
+    TeamMember --> UC5
 ```
 
 ## 4. Sequence diagrams
@@ -135,7 +142,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     F->>B: POST /api/v1/tasks {projectId, title, ...}
-    B->>B: ProjectAccessGuard.requireViewAccess
+    B->>B: ProjectAccessGuard.requireManageAccess (Producer)
     B->>DB: INSERT INTO tasks (status=TODO)
     B-->>F: 201 Task
 
@@ -171,17 +178,15 @@ sequenceDiagram
     S-->>C: PageResponse<TaskResponse>
 ```
 
-## 5. Scope: Core vs optional
+## 5. Scope
 
-**Core (built)**: auth, users/roles, teams, projects, tasks + labels, filtering/search/sort/pagination, Kanban board, dashboard, resource-level authorization, unit tests, Swagger, Docker, CI/CD.
-
-**Optional (not built, schema-ready)**: comments, notifications, activity history. These would arrive as `V2__add_comments.sql`, `V3__add_notifications.sql`, `V4__add_activity.sql` — never folded into `V1__init_schema.sql`, so the shipped schema stays honest about what's actually implemented.
+Built modules include authentication and user management, team membership, projects with unique codes and required timelines, tasks and status reviews, comments, notifications, activity history, dashboards, project budgets and expenses.
 
 ## 6. Key decisions
 
 - **DTOs everywhere, MapStruct for mapping** — entities never cross the service boundary.
 - **`TeamAccessGuard` / `ProjectAccessGuard`** — resource-level authorization centralized once, reused by every service that touches team- or project-owned resources, instead of duplicated per service.
-- **Three-tier task authorization**: view/create/move (any project member) < field-edit (assignee or manager) < assign/delete (manager only) — deliberately different bars for different actions, not a single role check.
+- **Business-role authorization**: Producers manage team/project/task records and finances; Content Managers can monitor and review tasks; Team Members update only assigned tasks and collaborate through comments. Team/project membership remains a separate resource-level requirement.
 - **`@EntityGraph` + `@BatchSize`** to avoid N+1 on task listing (see `TaskRepository`).
 - **`@Version` optimistic locking** on `Task` for concurrent Kanban drags.
 - **Flyway, not `ddl-auto`** — the schema is explicit, versioned, and reviewable.

@@ -26,7 +26,7 @@ public class LabelController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'PROJECT_MANAGER')")
+    @PreAuthorize("hasRole('PRODUCER')")
     public LabelResponse create(@Valid @RequestBody CreateLabelRequest request) {
         return labelService.createLabel(request);
     }

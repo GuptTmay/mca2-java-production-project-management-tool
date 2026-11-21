@@ -57,7 +57,7 @@ class AuthServiceTest {
     @Test
     void register_throwsDuplicateResourceException_whenEmailAlreadyExists() {
         RegisterRequest request = new RegisterRequest(
-                "taken@taskflow.io", "password123", "Ada", "Lovelace");
+                "taken@taskflow.io", "password123", "Ada", "Lovelace", Role.CONTENT_MANAGER);
         when(userRepository.existsByEmail("taken@taskflow.io")).thenReturn(true);
 
         assertThrows(DuplicateResourceException.class, () -> authService.register(request));
@@ -66,16 +66,16 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_createsUserWithDefaultDeveloperRoleAndEncodedPassword() {
+    void registerCreatesUserWithSelectedRoleAndEncodedPassword() {
         RegisterRequest request = new RegisterRequest(
-                "new@taskflow.io", "password123", "Ada", "Lovelace");
+                "new@taskflow.io", "password123", "Ada", "Lovelace", Role.PRODUCER);
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(jwtService.generateAccessToken(any())).thenReturn("access-token");
         when(jwtService.generateRefreshToken(any())).thenReturn("refresh-token");
         when(userMapper.toResponse(any())).thenReturn(new UserResponse(
-                UUID.randomUUID(), "new@taskflow.io", "Ada", "Lovelace", Role.DEVELOPER, true, Instant.now()));
+                UUID.randomUUID(), "new@taskflow.io", "Ada", "Lovelace", Role.PRODUCER, true, Instant.now()));
 
         AuthResponse response = authService.register(request);
 
@@ -83,7 +83,7 @@ class AuthServiceTest {
         verify(userRepository).save(captor.capture());
         User savedUser = captor.getValue();
 
-        assertThat(savedUser.getRole()).isEqualTo(Role.DEVELOPER);
+        assertThat(savedUser.getRole()).isEqualTo(Role.PRODUCER);
         assertThat(savedUser.getPasswordHash()).isEqualTo("encoded-password");
         assertThat(savedUser.getEmail()).isEqualTo("new@taskflow.io");
         assertThat(response.accessToken()).isEqualTo("access-token");
@@ -93,12 +93,12 @@ class AuthServiceTest {
     @Test
     void register_normalizesEmailToLowercase() {
         RegisterRequest request = new RegisterRequest(
-                "Mixed.Case@TaskFlow.io", "password123", "Ada", "Lovelace");
+                "Mixed.Case@TaskFlow.io", "password123", "Ada", "Lovelace", Role.TEAM_MEMBER);
         when(userRepository.existsByEmail(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(userMapper.toResponse(any())).thenReturn(new UserResponse(
-                UUID.randomUUID(), "mixed.case@taskflow.io", "Ada", "Lovelace", Role.DEVELOPER, true, Instant.now()));
+                UUID.randomUUID(), "mixed.case@taskflow.io", "Ada", "Lovelace", Role.TEAM_MEMBER, true, Instant.now()));
 
         authService.register(request);
 
@@ -119,16 +119,29 @@ class AuthServiceTest {
     @Test
     void login_succeeds_whenCredentialsAreValid() {
         LoginRequest request = new LoginRequest("user@taskflow.io", "correct-password");
-        User user = new User("user@taskflow.io", "hashed", "Grace", "Hopper", Role.DEVELOPER);
+        User user = new User("user@taskflow.io", "hashed", "Grace", "Hopper", Role.TEAM_MEMBER);
         when(userRepository.findByEmail("user@taskflow.io")).thenReturn(Optional.of(user));
         when(jwtService.generateAccessToken(user)).thenReturn("access-token");
         when(jwtService.generateRefreshToken(user)).thenReturn("refresh-token");
         when(userMapper.toResponse(user)).thenReturn(new UserResponse(
-                UUID.randomUUID(), "user@taskflow.io", "Grace", "Hopper", Role.DEVELOPER, true, Instant.now()));
+                UUID.randomUUID(), "user@taskflow.io", "Grace", "Hopper", Role.TEAM_MEMBER, true, Instant.now()));
 
         AuthResponse response = authService.login(request);
 
         assertThat(response.accessToken()).isEqualTo("access-token");
         assertThat(response.user().email()).isEqualTo("user@taskflow.io");
+    }
+
+    @Test
+    void refresh_rejectsDisabledAccounts() {
+        User user = new User("disabled@taskflow.io", "hashed", "Dee", "Activated", Role.TEAM_MEMBER);
+        user.setEnabled(false);
+        when(jwtService.isRefreshToken("refresh-token")).thenReturn(true);
+        when(jwtService.extractUsername("refresh-token")).thenReturn(user.getEmail());
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        assertThrows(BadCredentialsException.class,
+                () -> authService.refresh(new com.taskflow.auth.dto.RefreshRequest("refresh-token")));
+        verify(jwtService, never()).generateAccessToken(any());
     }
 }

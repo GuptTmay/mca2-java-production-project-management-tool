@@ -2,7 +2,6 @@ package com.taskflow.project;
 
 import com.taskflow.common.exception.ForbiddenOperationException;
 import com.taskflow.team.TeamAccessGuard;
-import com.taskflow.user.Role;
 import com.taskflow.user.User;
 import org.springframework.stereotype.Component;
 
@@ -24,16 +23,8 @@ public class ProjectAccessGuard {
         this.teamAccessGuard = teamAccessGuard;
     }
 
-    /**
-     * Explicit project member, any member of the project's team, or a global ADMIN.
-     */
+    /** A current member of the project's team. */
     public void requireViewAccess(Project project, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
-        }
-        if (projectMemberRepository.existsByProjectIdAndUserId(project.getId(), currentUser.getId())) {
-            return;
-        }
         try {
             teamAccessGuard.requireMembership(project.getTeam().getId(), currentUser);
         } catch (ForbiddenOperationException ex) {
@@ -41,12 +32,13 @@ public class ProjectAccessGuard {
         }
     }
 
-    /** Team OWNER/MANAGER, or a global ADMIN - project membership alone is not enough. */
+    /** A Producer who is a team OWNER/MANAGER - project membership alone is not enough. */
     public void requireManageAccess(Project project, User currentUser) {
         teamAccessGuard.requireManageAccess(project.getTeam().getId(), currentUser);
     }
 
-    public boolean isProjectMember(UUID projectId, UUID userId) {
-        return projectMemberRepository.existsByProjectIdAndUserId(projectId, userId);
+    public boolean isProjectMember(Project project, UUID userId) {
+        return projectMemberRepository.existsByProjectIdAndUserId(project.getId(), userId)
+                && teamAccessGuard.isTeamMember(project.getTeam().getId(), userId);
     }
 }

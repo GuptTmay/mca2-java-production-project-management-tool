@@ -10,7 +10,7 @@ import {
   type Task,
   type TaskPriority,
   type TaskStatus,
-  type TeamRole,
+  type Role,
 } from '../../lib/types'
 import { Spinner, ErrorBanner, Badge, EmptyState } from '../../components/ui'
 import { extractErrorMessage } from '../../api/client'
@@ -164,8 +164,8 @@ function Column({ status, tasks, canDrop, canDragTask, onTaskClickAction }: {
   )
 }
 
-function getAllowedTargets(currentStatus: TaskStatus, role: TeamRole): TaskStatus[] {
-  if (role === 'OWNER' || role === 'MANAGER') {
+function getAllowedTargets(currentStatus: TaskStatus, role: Role, assignedToCaller: boolean): TaskStatus[] {
+  if (role === 'PRODUCER') {
     switch (currentStatus) {
       case 'TODO':
         return ['IN_PROGRESS']
@@ -177,6 +177,12 @@ function getAllowedTargets(currentStatus: TaskStatus, role: TeamRole): TaskStatu
         return ['IN_PROGRESS']
     }
   }
+  if (role === 'CONTENT_MANAGER') {
+    if (currentStatus === 'IN_REVIEW') return ['IN_PROGRESS', 'DONE']
+    if (currentStatus === 'DONE') return ['IN_PROGRESS']
+    return []
+  }
+  if (!assignedToCaller) return []
   switch (currentStatus) {
     case 'TODO':
       return ['IN_PROGRESS']
@@ -189,11 +195,12 @@ function getAllowedTargets(currentStatus: TaskStatus, role: TeamRole): TaskStatu
   return []
 }
 
-export function KanbanBoard({ projectId, onTaskClick, canChangeStatus = true, userRole }: {
+export function KanbanBoard({ projectId, onTaskClick, canChangeStatus = true, userRole, currentUserId }: {
   projectId: string;
   onTaskClick: (task: Task) => void;
   canChangeStatus?: boolean;
-  userRole?: TeamRole;
+  userRole?: Role;
+  currentUserId?: string;
 }) {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
@@ -250,7 +257,7 @@ export function KanbanBoard({ projectId, onTaskClick, canChangeStatus = true, us
     if (!task || task.status === newStatus) return
 
     if (!userRole) return
-    const allowedTargets = getAllowedTargets(task.status, userRole)
+    const allowedTargets = getAllowedTargets(task.status, userRole, task.assigneeId === currentUserId)
     if (!allowedTargets.includes(newStatus)) {
       toast.error('That status change is not allowed for your role')
       return
@@ -264,10 +271,10 @@ export function KanbanBoard({ projectId, onTaskClick, canChangeStatus = true, us
     updateStatus.mutate({ taskId, status: newStatus })
   }
 
-  const role = userRole || 'MEMBER'
-  const draggable = canChangeStatus
-  const canDropOn = (status: TaskStatus) => visibleTasks.some((task) =>
-    getAllowedTargets(task.status, role).includes(status),
+  const role = userRole
+  const draggable = canChangeStatus && !!role
+  const canDropOn = (status: TaskStatus) => role != null && visibleTasks.some((task) =>
+    getAllowedTargets(task.status, role, task.assigneeId === currentUserId).includes(status),
   )
 
   const board = (
@@ -341,7 +348,8 @@ export function KanbanBoard({ projectId, onTaskClick, canChangeStatus = true, us
                 status={status}
                 tasks={tasksByStatus(status)}
                 canDrop={draggable && canDropOn(status)}
-                canDragTask={(task) => draggable && getAllowedTargets(task.status, role).length > 0}
+                canDragTask={(task) => draggable && role != null
+                  && getAllowedTargets(task.status, role, task.assigneeId === currentUserId).length > 0}
                 onTaskClickAction={onTaskClick}
               />
             ))}

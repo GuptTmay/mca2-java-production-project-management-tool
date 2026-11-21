@@ -55,7 +55,7 @@ class ActivityServiceTest {
 
     @Test
     void listForTask_requiresProjectViewAccess() {
-        User outsider = user(Role.DEVELOPER);
+        User outsider = user(Role.TEAM_MEMBER);
         Task task = task(outsider);
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
         doThrow(new ForbiddenOperationException("nope"))
@@ -68,7 +68,7 @@ class ActivityServiceTest {
 
     @Test
     void listForProject_requiresProjectViewAccess() {
-        User outsider = user(Role.DEVELOPER);
+        User outsider = user(Role.TEAM_MEMBER);
         Project project = project(outsider);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         doThrow(new ForbiddenOperationException("nope"))
@@ -81,7 +81,7 @@ class ActivityServiceTest {
 
     @Test
     void record_savesActivity() {
-        User actor = user(Role.DEVELOPER);
+        User actor = user(Role.TEAM_MEMBER);
         UUID taskId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
 

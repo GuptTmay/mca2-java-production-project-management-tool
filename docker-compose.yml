@@ -23,7 +23,7 @@ services:
       context: ./backend
     container_name: taskflow-backend
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
       DB_NAME: ${DB_NAME:-taskflow}
       DB_USERNAME: ${DB_USERNAME:-taskflow}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}

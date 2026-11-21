@@ -27,13 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * boots and wires together end to end: real Spring context, real Spring
  * Security filter chain, real JPA/Hibernate against a real PostgreSQL
  * instance (via Testcontainers), with the schema built exclusively by
- * running the real V1__init_schema.sql Flyway migration - not
+ * running the Flyway migrations - not
  * hibernate.ddl-auto. Everything else in this suite is a mocked unit test;
  * this is the one that can't lie about whether the pieces fit together.
  *
- * Requires a Docker daemon (Testcontainers). This sandbox has none, so this
- * test - like the rest of the backend - has been written but not executed
- * here; it runs for real in the GitHub Actions CI job, which does have Docker.
+ * Requires a Docker daemon (Testcontainers) and is skipped when one is unavailable.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
@@ -71,7 +69,8 @@ class AuthIntegrationTest {
                 "email", "integration@taskflow.io",
                 "password", "password123",
                 "firstName", "Integration",
-                "lastName", "Test");
+                "lastName", "Test",
+                "role", "TEAM_MEMBER");
 
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -80,7 +79,7 @@ class AuthIntegrationTest {
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.refreshToken").isNotEmpty())
                 .andExpect(jsonPath("$.user.email").value("integration@taskflow.io"))
-                .andExpect(jsonPath("$.user.role").value("DEVELOPER"));
+                .andExpect(jsonPath("$.user.role").value("TEAM_MEMBER"));
 
         Map<String, String> loginRequest = Map.of(
                 "email", "integration@taskflow.io",
@@ -99,7 +98,8 @@ class AuthIntegrationTest {
                 "email", "duplicate@taskflow.io",
                 "password", "password123",
                 "firstName", "A",
-                "lastName", "B");
+                "lastName", "B",
+                "role", "CONTENT_MANAGER");
 
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -118,7 +118,8 @@ class AuthIntegrationTest {
                 "email", "wrongpass@taskflow.io",
                 "password", "password123",
                 "firstName", "A",
-                "lastName", "B");
+                "lastName", "B",
+                "role", "TEAM_MEMBER");
         mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(registerRequest)))

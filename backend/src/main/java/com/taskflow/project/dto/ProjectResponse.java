@@ -10,6 +10,7 @@ public record ProjectResponse(
         UUID id,
         UUID teamId,
         String name,
+        String code,
         String description,
         ProjectStatus status,
         LocalDate startDate,

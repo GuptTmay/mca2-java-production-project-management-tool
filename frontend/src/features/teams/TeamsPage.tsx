@@ -6,9 +6,11 @@ import { Link } from 'react-router-dom'
 import { Plus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { extractErrorMessage } from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
 
 export function TeamsPage() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -37,13 +39,15 @@ export function TeamsPage() {
           <h1 className="text-3xl font-bold text-surface-900 tracking-tight">Teams</h1>
           <p className="mt-1 text-sm text-surface-500">Teams you belong to</p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          <Plus className="h-4 w-4" />
-          New team
-        </Button>
+        {user?.role === 'PRODUCER' && (
+          <Button onClick={() => setShowForm((v) => !v)}>
+            <Plus className="h-4 w-4" />
+            New team
+          </Button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && user?.role === 'PRODUCER' && (
         <Card className="p-6 glass-card" glass>
           <form
             className="space-y-4"

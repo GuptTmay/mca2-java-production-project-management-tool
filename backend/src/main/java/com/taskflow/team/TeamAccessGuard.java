@@ -21,20 +21,17 @@ public class TeamAccessGuard {
         this.teamMemberRepository = teamMemberRepository;
     }
 
-    /** Any team member, or a global ADMIN. */
+    /** Any member of the team. */
     public void requireMembership(UUID teamId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
-        }
         if (!teamMemberRepository.existsByTeamIdAndUserId(teamId, currentUser.getId())) {
             throw new ForbiddenOperationException("You are not a member of this team");
         }
     }
 
-    /** Team OWNER or MANAGER, or a global ADMIN. */
+    /** A Producer who is a team OWNER or MANAGER. */
     public void requireManageAccess(UUID teamId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
+        if (currentUser.getRole() != Role.PRODUCER) {
+            throw new ForbiddenOperationException("Only Producers can manage teams and projects");
         }
         TeamMember membership = teamMemberRepository.findByTeamIdAndUserId(teamId, currentUser.getId())
                 .orElseThrow(() -> new ForbiddenOperationException("You are not a member of this team"));
@@ -43,10 +40,10 @@ public class TeamAccessGuard {
         }
     }
 
-    /** Team OWNER only, or a global ADMIN. */
+    /** A Producer who is the team OWNER. */
     public void requireOwnerAccess(UUID teamId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
+        if (currentUser.getRole() != Role.PRODUCER) {
+            throw new ForbiddenOperationException("Only Producers can manage teams");
         }
         TeamMember membership = teamMemberRepository.findByTeamIdAndUserId(teamId, currentUser.getId())
                 .orElseThrow(() -> new ForbiddenOperationException("You are not a member of this team"));

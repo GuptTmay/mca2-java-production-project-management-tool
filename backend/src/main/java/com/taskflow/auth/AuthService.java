@@ -47,15 +47,12 @@ public class AuthService {
             throw new DuplicateResourceException("An account with this email already exists");
         }
 
-        // Every new account starts as DEVELOPER. Role escalation to ADMIN or
-        // PROJECT_MANAGER is an explicit ADMIN action (see UserService, Phase 4)
-        // - registration can never grant elevated privileges to the caller.
         User user = new User(
                 normalizedEmail,
                 passwordEncoder.encode(request.password()),
                 request.firstName().trim(),
                 request.lastName().trim(),
-                Role.DEVELOPER);
+                request.role());
 
         User saved = userRepository.save(user);
         return buildAuthResponse(saved);
@@ -85,7 +82,7 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new BadCredentialsException("Invalid refresh token"));
 
-        if (!jwtService.isTokenValid(token, user)) {
+        if (!user.isEnabled() || !jwtService.isTokenValid(token, user)) {
             throw new BadCredentialsException("Invalid or expired refresh token");
         }
 

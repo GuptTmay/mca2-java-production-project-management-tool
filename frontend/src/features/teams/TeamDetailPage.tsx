@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Trash2, Pencil, X, UserPlus, FolderOpen } from 'lucide-react'
 import { teamApi, projectApi } from '../../api/endpoints'
-import { Button, Card, EmptyState, ErrorBanner, Field, Input, Spinner } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Input, Spinner } from '../../components/ui'
 import { extractErrorMessage } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { PageHeader, SectionHeader } from '../../components/PageHeader'
@@ -20,7 +20,10 @@ export function TeamDetailPage() {
   const [memberRole, setMemberRole] = useState<TeamRole>('MEMBER')
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [projectCode, setProjectCode] = useState('')
   const [projectDescription, setProjectDescription] = useState('')
+  const [projectStartDate, setProjectStartDate] = useState('')
+  const [projectEndDate, setProjectEndDate] = useState('')
   const [isEditingTeam, setIsEditingTeam] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
@@ -46,7 +49,7 @@ export function TeamDetailPage() {
   const currentUserTeamRole = membersQuery.data?.find(m => m.userId === user?.id)?.teamRole
   const isOwner = currentUserTeamRole === 'OWNER'
   const isManager = currentUserTeamRole === 'MANAGER'
-  const canManage = isOwner || isManager
+  const canManage = user?.role === 'PRODUCER' && (isOwner || isManager)
 
   const addMember = useMutation({
     mutationFn: () => teamApi.addMember(teamId!, memberEmail, memberRole),
@@ -65,6 +68,16 @@ export function TeamDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
     },
     onError: (err) => toast.error(extractErrorMessage(err, 'Could not remove that member')),
+  })
+
+  const updateMemberRole = useMutation({
+    mutationFn: ({ userId, teamRole }: { userId: string; teamRole: TeamRole }) =>
+      teamApi.updateMemberRole(teamId!, userId, teamRole),
+    onSuccess: () => {
+      toast.success('Member role updated')
+      queryClient.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, 'Could not update member role')),
   })
 
   const updateTeam = useMutation({
@@ -86,11 +99,21 @@ export function TeamDetailPage() {
   })
 
   const createProject = useMutation({
-    mutationFn: () => projectApi.create({ teamId: teamId!, name: projectName, description: projectDescription || undefined }),
+    mutationFn: () => projectApi.create({
+      teamId: teamId!,
+      name: projectName,
+      code: projectCode.trim().toUpperCase(),
+      description: projectDescription || undefined,
+      startDate: projectStartDate,
+      endDate: projectEndDate,
+    }),
     onSuccess: () => {
       toast.success('Project created')
       setProjectName('')
+      setProjectCode('')
       setProjectDescription('')
+      setProjectStartDate('')
+      setProjectEndDate('')
       setShowProjectForm(false)
       queryClient.invalidateQueries({ queryKey: ['projects', { teamId }] })
     },
@@ -118,7 +141,7 @@ export function TeamDetailPage() {
         description={team.description || 'No description provided'}
         action={
           <div className="flex items-center gap-2">
-            {isOwner && (
+            {user?.role === 'PRODUCER' && isOwner && (
               <>
                 <Button variant="secondary" onClick={() => { setEditName(team.name); setEditDescription(team.description || ''); setIsEditingTeam(true) }}>
                   <Pencil className="h-4 w-4" /> Edit
@@ -133,7 +156,7 @@ export function TeamDetailPage() {
       />
 
       {/* Edit Team Form */}
-      {isEditingTeam && (
+      {isEditingTeam && user?.role === 'PRODUCER' && isOwner && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-surface-900 mb-4">Edit Team</h3>
           <div className="space-y-4">
@@ -172,8 +195,17 @@ export function TeamDetailPage() {
                 <Field label="Project Name">
                   <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} required maxLength={150} />
                 </Field>
+                <Field label="Project Code">
+                  <Input value={projectCode} onChange={(e) => setProjectCode(e.target.value.toUpperCase())} required maxLength={50} />
+                </Field>
                 <Field label="Description">
                   <Input value={projectDescription} onChange={(e) => setProjectDescription(e.target.value)} maxLength={2000} />
+                </Field>
+                <Field label="Start Date">
+                  <Input type="date" value={projectStartDate} onChange={(e) => setProjectStartDate(e.target.value)} required />
+                </Field>
+                <Field label="Target End Date">
+                  <Input type="date" value={projectEndDate} min={projectStartDate || undefined} onChange={(e) => setProjectEndDate(e.target.value)} required />
                 </Field>
               </div>
               <div className="flex gap-2">
@@ -207,104 +239,136 @@ export function TeamDetailPage() {
       </div>
 
       {/* Members Section */}
-      {canManage && (
-        <div>
-          <SectionHeader
-            title="Members"
-            description="Manage team members and roles"
-            action={
-              <Button onClick={() => (document.getElementById('add-member-form') as HTMLFormElement | null)?.requestSubmit()}>
-                <UserPlus className="h-4 w-4" />
-                Add Member
-              </Button>
-            }
-          />
-          <Card className="p-6">
+      <div>
+        <SectionHeader
+          title="Members"
+          description={membersQuery.data
+            ? `${membersQuery.data.length} ${membersQuery.data.length === 1 ? 'person' : 'people'} in this team`
+            : 'People who have access to this team'}
+        />
+        <Card className="mt-4 p-4 sm:p-6">
+          {canManage && (
             <form
-              id="add-member-form"
-              className="flex flex-wrap items-end gap-3 mb-6"
-              onSubmit={(e) => {
-                e.preventDefault()
+              className="mb-5 grid gap-3 border-b border-surface-200/60 pb-5 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end"
+              onSubmit={(event) => {
+                event.preventDefault()
                 addMember.mutate()
               }}
             >
-              <div className="flex-1 min-w-[200px]">
-                <Field label="User email">
-                  <Input
-                    value={memberEmail}
-                    onChange={(e) => setMemberEmail(e.target.value)}
-                    placeholder="email of the user to add"
-                    required
-                  />
-                </Field>
-              </div>
-              <div>
-                <Field label="Role">
-                  <select
-                    className="glass-input cursor-pointer"
-                    value={memberRole}
-                    onChange={(e) => setMemberRole(e.target.value as TeamRole)}
-                  >
-                    <option value="MEMBER">Member</option>
-                    {isOwner && <option value="MANAGER">Manager</option>}
-                  </select>
-                </Field>
-              </div>
+              <Field label="Invite by email">
+                <Input
+                  type="email"
+                  autoComplete="email"
+                  value={memberEmail}
+                  onChange={(event) => setMemberEmail(event.target.value)}
+                  placeholder="name@example.com"
+                  required
+                />
+              </Field>
+              <Field label="Team role">
+                <select
+                  className="glass-input cursor-pointer"
+                  value={memberRole}
+                  onChange={(event) => setMemberRole(event.target.value as TeamRole)}
+                >
+                  <option value="MEMBER">Member</option>
+                  {isOwner && <option value="MANAGER">Manager</option>}
+                </select>
+              </Field>
+              <Button type="submit" loading={addMember.isPending}>
+                <UserPlus className="h-4 w-4" />
+                Add member
+              </Button>
             </form>
-            {membersQuery.data && membersQuery.data.length > 0 && (
-              <div className="rounded-2xl border border-surface-200/60 bg-white/40 backdrop-blur-sm divide-y divide-surface-100">
-                {membersQuery.data.map((member) => {
-                  const canRemove = isOwner || (isManager && member.teamRole === 'MEMBER')
-                  const canChangeRole = isOwner && member.teamRole !== 'OWNER'
-                  return (
-                    <div key={member.id} className="flex items-center justify-between px-4 py-3 hover:bg-white/40 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={`${member.userFirstName} ${member.userLastName}`} email={member.userEmail} size="sm" />
-                        <div>
-                          <p className="text-sm font-semibold text-surface-800">
-                            {member.userFirstName} {member.userLastName}
-                          </p>
-                          <p className="text-xs text-surface-400">{member.userEmail}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <StatusBadge status={member.teamRole === 'OWNER' ? 'DONE' : member.teamRole === 'MANAGER' ? 'IN_PROGRESS' : 'TODO'} />
-                        {canChangeRole && (
-                          <select
-                            className="glass-input cursor-pointer text-xs py-1 px-2 w-32"
-                            value={member.teamRole}
-                            onChange={(e) => {
-                              const newRole = e.target.value as TeamRole
-                              if (newRole !== member.teamRole) {
-                                teamApi.updateMemberRole(teamId!, member.userId, newRole).then(() => {
-                                  toast.success('Role updated')
-                                  queryClient.invalidateQueries({ queryKey: ['teams', teamId, 'members'] })
-                                }).catch((err) => toast.error(extractErrorMessage(err, 'Could not update role')))
-                              }
-                            }}
-                          >
-                            <option value="MEMBER">Member</option>
-                            <option value="MANAGER">Manager</option>
-                          </select>
-                        )}
-                        {canRemove && (
-                          <button
-                            onClick={() => removeMember.mutate(member.userId)}
-                            className="text-surface-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50"
-                            title="Remove member"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
+          )}
+
+          {membersQuery.isLoading ? (
+            <Spinner />
+          ) : membersQuery.isError ? (
+            <div className="space-y-3">
+              <ErrorBanner message={extractErrorMessage(membersQuery.error, 'Could not load team members')} />
+              <Button type="button" variant="secondary" size="sm" onClick={() => membersQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : !membersQuery.data?.length ? (
+            <EmptyState
+              title="No team members"
+              description={canManage ? 'Invite people by email to collaborate with your team.' : 'No members are currently listed.'}
+            />
+          ) : (
+            <ul className="divide-y divide-surface-100 dark:divide-surface-800" aria-label="Team members">
+              {membersQuery.data.map((member) => {
+                const canRemove = isOwner
+                  ? member.teamRole !== 'OWNER'
+                  : isManager && member.teamRole === 'MEMBER'
+                const canChangeRole = isOwner && member.teamRole !== 'OWNER'
+                const roleVariant = member.teamRole === 'OWNER'
+                  ? 'warning'
+                  : member.teamRole === 'MANAGER' ? 'info' : 'default'
+
+                return (
+                  <li
+                    key={member.id}
+                    className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar
+                        name={`${member.userFirstName} ${member.userLastName}`}
+                        email={member.userEmail}
+                        size="md"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-surface-800 dark:text-surface-100">
+                          {member.userFirstName} {member.userLastName}
+                          {member.userId === user?.id && <span className="ml-2 font-normal text-surface-400">(you)</span>}
+                        </p>
+                        <p className="truncate text-xs text-surface-500 dark:text-surface-400">{member.userEmail}</p>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </Card>
-        </div>
-      )}
+                    <div className="flex flex-wrap items-center gap-2 pl-11 sm:pl-0">
+                      <Badge variant={roleVariant}>{member.teamRole}</Badge>
+                      {canChangeRole && (
+                        <label className="sr-only" htmlFor={`team-role-${member.userId}`}>
+                          Change role for {member.userFirstName} {member.userLastName}
+                        </label>
+                      )}
+                      {canChangeRole && (
+                        <select
+                          id={`team-role-${member.userId}`}
+                          className="glass-input cursor-pointer py-1.5 text-xs"
+                          value={member.teamRole}
+                          disabled={updateMemberRole.isPending}
+                          onChange={(event) => updateMemberRole.mutate({
+                            userId: member.userId,
+                            teamRole: event.target.value as TeamRole,
+                          })}
+                        >
+                          <option value="MEMBER">Member</option>
+                          <option value="MANAGER">Manager</option>
+                        </select>
+                      )}
+                      {canRemove && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={removeMember.isPending}
+                          onClick={() => removeMember.mutate(member.userId)}
+                          aria-label={`Remove ${member.userFirstName} ${member.userLastName} from team`}
+                          title="Remove from team"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   )
 }

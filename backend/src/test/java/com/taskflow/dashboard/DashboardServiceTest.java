@@ -59,7 +59,7 @@ class DashboardServiceTest {
 
     @Test
     void getProjectDashboard_requiresProjectViewAccess() {
-        User outsider = user(Role.DEVELOPER);
+        User outsider = user(Role.TEAM_MEMBER);
         Project project = project(outsider);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         doThrow(new ForbiddenOperationException("nope"))
@@ -71,7 +71,7 @@ class DashboardServiceTest {
 
     @Test
     void getProjectDashboard_computesTotalsPercentageAndZeroFillsMissingBuckets() {
-        User owner = user(Role.DEVELOPER);
+        User owner = user(Role.TEAM_MEMBER);
         Project project = project(owner);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         when(taskRepository.countByProjectId(project.getId())).thenReturn(10L);
@@ -99,7 +99,7 @@ class DashboardServiceTest {
 
     @Test
     void getProjectDashboard_avoidsDivisionByZeroWhenProjectHasNoTasks() {
-        User owner = user(Role.DEVELOPER);
+        User owner = user(Role.TEAM_MEMBER);
         Project project = project(owner);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         when(taskRepository.countByProjectId(project.getId())).thenReturn(0L);
@@ -117,7 +117,7 @@ class DashboardServiceTest {
 
     @Test
     void getMyTasksSummary_aggregatesAcrossProjectsForTheCurrentUserOnly() {
-        User currentUser = user(Role.DEVELOPER);
+        User currentUser = user(Role.TEAM_MEMBER);
         when(taskRepository.countByAssigneeId(currentUser.getId())).thenReturn(5L);
         when(taskRepository.countByAssigneeIdAndDeadlineBeforeAndStatusNot(
                 eq(currentUser.getId()), any(Instant.class), eq(TaskStatus.DONE))).thenReturn(1L);

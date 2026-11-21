@@ -11,9 +11,10 @@ import java.util.UUID;
 public record CreateProjectRequest(
         @NotNull UUID teamId,
         @NotBlank @Size(max = 150) String name,
+        @NotBlank @Size(max = 50) String code,
         @Size(max = 2000) String description,
         ProjectStatus status,
-        LocalDate startDate,
-        LocalDate endDate
+        @NotNull LocalDate startDate,
+        @NotNull LocalDate endDate
 ) {
 }

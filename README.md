@@ -1,19 +1,19 @@
 # TaskFlow
 
-A collaborative project management platform (Jira/Trello-style) built as a Software Engineering portfolio project: JWT-secured Spring Boot API, PostgreSQL with Flyway migrations, a React/TypeScript frontend with a drag-and-drop Kanban board, Docker Compose, and a GitHub Actions CI pipeline.
+A media production project management platform (Jira/Trello-style) built as a Software Engineering portfolio project: JWT-secured Spring Boot API, PostgreSQL with Flyway migrations, a React/TypeScript frontend with a drag-and-drop Kanban board, Docker Compose, and a GitHub Actions CI pipeline.
 
 ## Features
 
-- **Auth**: register/login/refresh, JWT access + refresh tokens, BCrypt password hashing
+- **Auth**: role-selecting registration, login/refresh, JWT access + refresh tokens, BCrypt password hashing, Producer user management and account activation
 - **Teams**: create teams, manage membership, team-scoped roles (OWNER/MANAGER/MEMBER)
-- **Projects**: team-scoped projects with status, membership, date ranges
+- **Projects**: team-scoped projects with unique codes, status, required start/target dates, membership, budgets and expense tracking
 - **Tasks**: CRUD, dynamic filtering (status/priority/assignee/deadline range/search), pagination & sorting, labels, optimistic locking
 - **Kanban board**: drag-and-drop between TODO → IN_PROGRESS → IN_REVIEW → DONE, with server-side transition validation (no skipping columns) and optimistic locking against concurrent drags
 - **Task comments**: add, edit, and delete comments on tasks; authorization enforced server-side
 - **Activity history**: audit trail of task and project actions (status changes, assignments, label changes, comments)
 - **Notifications**: persistent notifications for task assignments, with unread count, mark-as-read, and mark-all-as-read
 - **Dashboard**: per-project stats (totals, completion %, overdue, by status/priority) and a cross-project "my tasks" view
-- **Authorization**: global roles (ADMIN/PROJECT_MANAGER/DEVELOPER) plus resource-level checks (team role, project membership, task assignment)
+- **Authorization**: Producer, Content Manager and Team Member business roles, plus server-enforced team/project membership and task-assignment rules
 - **API docs**: Swagger UI with JWT bearer auth wired in
 
 ## Tech stack
@@ -64,10 +64,11 @@ Resource-level authorization is centralized in two reusable guard components —
 
 | Table | Purpose |
 |-------|---------|
-| `users` | Accounts with global roles (ADMIN, PROJECT_MANAGER, DEVELOPER) |
+| `users` | Accounts with global roles (PRODUCER, CONTENT_MANAGER, TEAM_MEMBER) and active state |
 | `teams` | Team workspace with creator reference |
 | `team_members` | Team membership with roles (OWNER, MANAGER, MEMBER) |
-| `projects` | Team-scoped projects with status and date ranges |
+| `projects` | Team-scoped projects with unique code, status, required dates, budget and currency |
+| `project_expenses` | Project expense items with amount, category, date and creator |
 | `project_members` | Project membership |
 | `tasks` | Work items with status, priority, assignee, reporter, deadline, optimistic lock version |
 | `labels` | Global labels with name and color |
@@ -81,9 +82,9 @@ Resource-level authorization is centralized in two reusable guard components —
 1. Register / login returns JWT access token (15 min) + refresh token (7 days)
 2. Access tokens are sent in the `Authorization: Bearer` header
 3. Refresh tokens are used to obtain new access tokens when the old one expires
-4. Global roles (`@PreAuthorize`) protect admin-only endpoints
-5. Resource-level guards (`TeamAccessGuard`, `ProjectAccessGuard`) enforce team membership and project access
-6. Task operations have three authorization tiers: view (any project member), edit (assignee or manager), manage (manager only)
+4. Registration accepts one of the three defined business roles; Producers can manage user roles and account activation.
+5. Resource-level guards (`TeamAccessGuard`, `ProjectAccessGuard`) enforce Producer privileges plus team membership and project access.
+6. Team Members update only their assigned task statuses; Content Managers can approve or return tasks in review; Producers manage projects, teams, tasks and project finances.
 
 ## API documentation
 
@@ -97,6 +98,9 @@ Key endpoints:
 | POST | `/api/v1/auth/login` | Login (returns tokens) |
 | POST | `/api/v1/auth/refresh` | Refresh access token |
 | GET | `/api/v1/auth/me` | Get current user |
+| GET | `/api/v1/users` | Producer: list users |
+| PATCH | `/api/v1/users/{id}/role` | Producer: change a user's role |
+| PATCH | `/api/v1/users/{id}/enabled` | Producer: activate/deactivate an account |
 | GET | `/api/v1/teams` | List teams |
 | POST | `/api/v1/teams` | Create team |
 | GET | `/api/v1/teams/{id}` | Get team |
@@ -110,6 +114,10 @@ Key endpoints:
 | POST | `/api/v1/projects` | Create project |
 | GET | `/api/v1/projects/{id}` | Get project |
 | PATCH | `/api/v1/projects/{id}` | Update project |
+| GET | `/api/v1/projects/{id}/finance` | View budget and expense summary |
+| PATCH | `/api/v1/projects/{id}/budget` | Set project budget and currency |
+| POST | `/api/v1/projects/{id}/expenses` | Record an expense |
+| DELETE | `/api/v1/projects/{id}/expenses/{expenseId}` | Remove an expense |
 | DELETE | `/api/v1/projects/{id}` | Delete project |
 | GET | `/api/v1/projects/{id}/members` | List project members |
 | POST | `/api/v1/projects/{id}/members` | Add project member |
@@ -155,9 +163,10 @@ taskflow/
 │   │   ├── activity/             Activity/audit history
 │   │   ├── notification/         Notifications
 │   │   ├── dashboard/            Stats aggregation
+│   │   ├── expense/              Project budgets and expense records
 │   │   └── common/               DTOs, exceptions
 │   └── src/main/resources/
-│       └── db/migration/         Flyway SQL migrations (V1-V4)
+│       └── db/migration/         Flyway SQL migrations (V1-V8)
 ├── frontend/                     React/TypeScript SPA
 │   └── src/
 │       ├── api/                  Axios client, endpoint modules
@@ -214,6 +223,27 @@ npm install
 npm run dev
 ```
 
+### Local test data
+
+The default `dev` profile loads repeat-safe demo data from `backend/src/main/resources/db/dev-migration/R__dev_seed_data.sql` through Flyway. It creates a sample team, two projects, tasks across all workflow statuses, comments, notifications, activity/history, labels, and expenses. The seed is not enabled by the default Docker profile.
+
+To load the same demo data with Docker Compose, opt into both profiles:
+
+```bash
+SPRING_PROFILES_ACTIVE=docker,dev docker compose up --build
+```
+
+All seeded accounts use the password `Taskflow123!`:
+
+| Role | Email |
+|------|-------|
+| Producer / team owner | `producer@test.taskflow.local` |
+| Producer / team manager | `manager@test.taskflow.local` |
+| Content Manager | `content@test.taskflow.local` |
+| Team Member | `member@test.taskflow.local` |
+
+These are local testing credentials only. Do not enable the `dev` profile in a production deployment. Seed inserts are idempotent and do not reset records that already exist.
+
 ## Environment variables
 
 | Variable | Default | Description |
@@ -250,11 +280,11 @@ Both must pass before merging.
 
 ## Default accounts
 
-There are no seeded accounts — register through `POST /api/v1/auth/register` (or the UI). Every new account starts with the `DEVELOPER` role; promote to `ADMIN`/`PROJECT_MANAGER` via `PATCH /api/v1/users/{id}/role` (requires an existing ADMIN).
+There are no seeded accounts — register through `POST /api/v1/auth/register` (or the UI) and choose Producer, Content Manager, or Team Member. Registration is intentionally open and role-selectable, as requested for this project.
 
 ## Known limitations
 
-- **Adding team members requires a raw user ID** in the current UI/API — there's no user-search-by-email endpoint yet.
+- **Team membership lookup uses an exact email address**; there is no user-search/picker endpoint yet.
 - **Kanban board only supports cross-column moves**, not within-column reordering.
 - **Frontend has no automated test suite** (Vitest/RTL) yet — verification is the real `tsc` type-check + `vite build`.
 

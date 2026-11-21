@@ -15,8 +15,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,16 +33,17 @@ class TeamAccessGuardTest {
     }
 
     @Test
-    void requireMembership_allowsAdminWithoutLookup() {
-        User admin = user(Role.ADMIN);
+    void requireMembership_doesNotAllowProducerOutsideTeam() {
+        User producer = user(Role.PRODUCER);
 
-        assertDoesNotThrow(() -> guard.requireMembership(teamId, admin));
-        verify(teamMemberRepository, never()).existsByTeamIdAndUserId(any(), any());
+        when(teamMemberRepository.existsByTeamIdAndUserId(teamId, producer.getId())).thenReturn(false);
+        assertThrows(ForbiddenOperationException.class, () -> guard.requireMembership(teamId, producer));
+        verify(teamMemberRepository).existsByTeamIdAndUserId(teamId, producer.getId());
     }
 
     @Test
     void requireMembership_allowsExistingMember() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         when(teamMemberRepository.existsByTeamIdAndUserId(teamId, dev.getId())).thenReturn(true);
 
         assertDoesNotThrow(() -> guard.requireMembership(teamId, dev));
@@ -52,7 +51,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireMembership_forbidsNonMember() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         when(teamMemberRepository.existsByTeamIdAndUserId(teamId, dev.getId())).thenReturn(false);
 
         assertThrows(ForbiddenOperationException.class, () -> guard.requireMembership(teamId, dev));
@@ -60,7 +59,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireManageAccess_allowsOwnerAndManager() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         Team team = new Team("Platform", "desc", dev);
         TeamMember membership = new TeamMember(team, dev, TeamRole.MANAGER);
         when(teamMemberRepository.findByTeamIdAndUserId(teamId, dev.getId())).thenReturn(Optional.of(membership));
@@ -70,7 +69,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireManageAccess_forbidsPlainMember() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         Team team = new Team("Platform", "desc", dev);
         TeamMember membership = new TeamMember(team, dev, TeamRole.MEMBER);
         when(teamMemberRepository.findByTeamIdAndUserId(teamId, dev.getId())).thenReturn(Optional.of(membership));
@@ -80,7 +79,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireManageAccess_forbidsNonMemberEntirely() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         when(teamMemberRepository.findByTeamIdAndUserId(teamId, dev.getId())).thenReturn(Optional.empty());
 
         assertThrows(ForbiddenOperationException.class, () -> guard.requireManageAccess(teamId, dev));
@@ -88,7 +87,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireOwnerAccess_forbidsManager() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         Team team = new Team("Platform", "desc", dev);
         TeamMember membership = new TeamMember(team, dev, TeamRole.MANAGER);
         when(teamMemberRepository.findByTeamIdAndUserId(teamId, dev.getId())).thenReturn(Optional.of(membership));
@@ -98,7 +97,7 @@ class TeamAccessGuardTest {
 
     @Test
     void requireOwnerAccess_allowsOwner() {
-        User dev = user(Role.DEVELOPER);
+        User dev = user(Role.PRODUCER);
         Team team = new Team("Platform", "desc", dev);
         TeamMember membership = new TeamMember(team, dev, TeamRole.OWNER);
         when(teamMemberRepository.findByTeamIdAndUserId(teamId, dev.getId())).thenReturn(Optional.of(membership));
@@ -107,11 +106,14 @@ class TeamAccessGuardTest {
     }
 
     @Test
-    void requireOwnerAccess_allowsAdminWithoutLookup() {
-        User admin = user(Role.ADMIN);
+    void requireOwnerAccess_allowsProducerWhoIsOwner() {
+        User producer = user(Role.PRODUCER);
+        Team team = new Team("Platform", "desc", producer);
+        TeamMember membership = new TeamMember(team, producer, TeamRole.OWNER);
+        when(teamMemberRepository.findByTeamIdAndUserId(teamId, producer.getId())).thenReturn(Optional.of(membership));
 
-        assertDoesNotThrow(() -> guard.requireOwnerAccess(teamId, admin));
-        verify(teamMemberRepository, never()).findByTeamIdAndUserId(any(), any());
+        assertDoesNotThrow(() -> guard.requireOwnerAccess(teamId, producer));
+        verify(teamMemberRepository).findByTeamIdAndUserId(teamId, producer.getId());
     }
 
     private static User user(Role role) {

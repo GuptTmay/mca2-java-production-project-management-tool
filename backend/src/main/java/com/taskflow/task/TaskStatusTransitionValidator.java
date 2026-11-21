@@ -1,7 +1,8 @@
 package com.taskflow.task;
 
 import com.taskflow.common.exception.InvalidStateTransitionException;
-import com.taskflow.team.TeamRole;
+import com.taskflow.common.exception.ForbiddenOperationException;
+import com.taskflow.user.Role;
 
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -12,8 +13,9 @@ import java.util.Set;
  * Role-based task status transition validator.
  *
  * Allowed transitions:
- *  - MEMBER: TODO -> IN_PROGRESS, IN_PROGRESS -> TODO, IN_PROGRESS -> IN_REVIEW
- *  - MANAGER/OWNER: all MEMBER transitions plus IN_REVIEW -> IN_PROGRESS, IN_REVIEW -> DONE, DONE -> IN_PROGRESS
+ *  - Team Member: assigned task TODO -> IN_PROGRESS, IN_PROGRESS -> TODO/IN_REVIEW
+ *  - Content Manager: IN_REVIEW -> IN_PROGRESS/DONE and DONE -> IN_PROGRESS
+ *  - Producer: any adjacent transition
  *
  * Any transition not listed below is rejected with a 400 Bad Request.
  * Attempting a legal transition without the required role is rejected with 403 Forbidden.
@@ -47,22 +49,26 @@ public final class TaskStatusTransitionValidator {
         }
     }
 
-    /**
-     * Validates that the caller's team role permits the requested transition.
-     *
-     * @param current   current task status
-     * @param target    requested new status
-     * @param teamRole  caller's team role (OWNER, MANAGER, MEMBER)
-     */
-    public static void validateRolePermission(TaskStatus current, TaskStatus target, TeamRole teamRole) {
-        if (current == target) {
+    public static void validateRolePermission(
+            TaskStatus current, TaskStatus target, Role role, boolean assignedToCaller) {
+        if (current == target || role == Role.PRODUCER) {
             return;
         }
-        if (teamRole == TeamRole.OWNER || teamRole == TeamRole.MANAGER) {
-            return;
+
+        if (role == Role.CONTENT_MANAGER) {
+            boolean mayReview = switch (current) {
+                case IN_REVIEW -> target == TaskStatus.IN_PROGRESS || target == TaskStatus.DONE;
+                case DONE -> target == TaskStatus.IN_PROGRESS;
+                default -> false;
+            };
+            if (mayReview) {
+                return;
+            }
+            throw new ForbiddenOperationException("Content Managers can only approve or return tasks for review");
         }
-        if (teamRole != TeamRole.MEMBER) {
-            throw new InvalidStateTransitionException("Unknown team role: " + teamRole);
+
+        if (!assignedToCaller) {
+            throw new ForbiddenOperationException("Team Members can only update tasks assigned to them");
         }
         boolean memberAllowed = switch (current) {
             case TODO -> target == TaskStatus.IN_PROGRESS;
@@ -70,8 +76,7 @@ public final class TaskStatusTransitionValidator {
             case IN_REVIEW, DONE -> false;
         };
         if (!memberAllowed) {
-            throw new InvalidStateTransitionException(
-                    "Members can only move tasks from TODO to IN_PROGRESS, or from IN_PROGRESS to TODO or IN_REVIEW");
+            throw new ForbiddenOperationException("Team Members can only start, pause, or submit their assigned tasks for review");
         }
     }
 }

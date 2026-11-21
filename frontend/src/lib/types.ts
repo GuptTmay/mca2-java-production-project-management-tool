@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER'
+export type Role = 'PRODUCER' | 'CONTENT_MANAGER' | 'TEAM_MEMBER'
 export type TeamRole = 'OWNER' | 'MANAGER' | 'MEMBER'
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
@@ -52,13 +52,34 @@ export interface Project {
   id: string
   teamId: string
   name: string
+  code: string
   description?: string
   status: ProjectStatus
-  startDate?: string
-  endDate?: string
+  startDate: string
+  endDate: string
   createdBy: string
   createdAt: string
   updatedAt: string
+}
+
+export interface ProjectFinance {
+  projectId: string
+  budgetAmount: number
+  currencyCode: string
+  totalExpenses: number
+  remainingBudget: number
+  expenses: ProjectExpense[]
+}
+
+export interface ProjectExpense {
+  id: string
+  projectId: string
+  description: string
+  category?: string
+  amount: number
+  spentOn: string
+  createdBy: string
+  createdAt: string
 }
 
 export interface ProjectMember {

@@ -11,16 +11,11 @@ import com.taskflow.notification.NotificationType;
 import com.taskflow.project.Project;
 import com.taskflow.project.ProjectAccessGuard;
 import com.taskflow.project.ProjectRepository;
-import com.taskflow.team.TeamAccessGuard;
-import com.taskflow.team.TeamMember;
-import com.taskflow.team.TeamMemberRepository;
-import com.taskflow.team.TeamRole;
 import com.taskflow.task.dto.AssignTaskRequest;
 import com.taskflow.task.dto.CreateTaskRequest;
 import com.taskflow.task.dto.TaskResponse;
 import com.taskflow.task.dto.UpdateTaskRequest;
 import com.taskflow.task.dto.UpdateTaskStatusRequest;
-import com.taskflow.user.Role;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import org.springframework.data.domain.Pageable;
@@ -41,8 +36,6 @@ public class TaskService {
     private final TaskMapper taskMapper;
     private final ActivityService activityService;
     private final NotificationService notificationService;
-    private final TeamAccessGuard teamAccessGuard;
-    private final TeamMemberRepository teamMemberRepository;
     private final TaskHistoryRepository taskHistoryRepository;
     private final TaskHistoryMapper taskHistoryMapper;
 
@@ -55,8 +48,6 @@ public class TaskService {
             TaskMapper taskMapper,
             ActivityService activityService,
             NotificationService notificationService,
-            TeamAccessGuard teamAccessGuard,
-            TeamMemberRepository teamMemberRepository,
             TaskHistoryRepository taskHistoryRepository,
             TaskHistoryMapper taskHistoryMapper) {
         this.taskRepository = taskRepository;
@@ -67,8 +58,6 @@ public class TaskService {
         this.taskMapper = taskMapper;
         this.activityService = activityService;
         this.notificationService = notificationService;
-        this.teamAccessGuard = teamAccessGuard;
-        this.teamMemberRepository = teamMemberRepository;
         this.taskHistoryRepository = taskHistoryRepository;
         this.taskHistoryMapper = taskHistoryMapper;
     }
@@ -140,11 +129,7 @@ public class TaskService {
         return response;
     }
 
-    /**
-     * Kanban drag-and-drop endpoint. Enforces role-based lifecycle transitions:
-     *  - MEMBER: TODO -> IN_PROGRESS, IN_PROGRESS -> TODO, IN_PROGRESS -> IN_REVIEW
-     *  - MANAGER/OWNER: all MEMBER transitions plus IN_REVIEW -> IN_PROGRESS, IN_REVIEW -> DONE, DONE -> IN_PROGRESS
-     */
+    /** Enforces the task workflow and each business role's permitted transitions. */
     @Transactional
     public TaskResponse updateStatus(UUID taskId, UpdateTaskStatusRequest request, User currentUser) {
         Task task = findTaskOrThrow(taskId);
@@ -155,8 +140,10 @@ public class TaskService {
 
         TaskStatusTransitionValidator.validate(oldStatus, targetStatus);
 
-        TeamRole callerRole = resolveTeamRole(task.getProject().getId(), currentUser);
-        TaskStatusTransitionValidator.validateRolePermission(oldStatus, targetStatus, callerRole);
+        boolean assignedToCaller = task.getAssignee() != null
+                && task.getAssignee().getId().equals(currentUser.getId());
+        TaskStatusTransitionValidator.validateRolePermission(
+                oldStatus, targetStatus, currentUser.getRole(), assignedToCaller);
 
         task.setStatus(targetStatus);
 
@@ -177,9 +164,7 @@ public class TaskService {
     }
 
     /**
-     * Reassignment is a management decision, not something the current assignee
-     * (or any project member) can do to themselves - requires team OWNER/MANAGER
-     * or ADMIN, same bar as adding/removing project members.
+     * Reassignment is a Producer action, not something an assignee can do to themselves.
      */
     @Transactional
     public TaskResponse assignTask(UUID taskId, AssignTaskRequest request, User currentUser) {
@@ -252,29 +237,17 @@ public class TaskService {
     private User resolveAssignee(Project project, UUID assigneeId) {
         User candidate = userRepository.findById(assigneeId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", assigneeId));
-        if (!projectAccessGuard.isProjectMember(project.getId(), candidate.getId())) {
+        if (!candidate.isEnabled()) {
+            throw new IllegalArgumentException("Tasks can only be assigned to active users");
+        }
+        if (!projectAccessGuard.isProjectMember(project, candidate.getId())) {
             throw new IllegalArgumentException("A task can only be assigned to a member of its project");
         }
         return candidate;
     }
 
-    /** Field-level edit (title/description/priority/deadline/labels): team OWNER/MANAGER or ADMIN only. */
+    /** Field-level edit (title/description/priority/deadline/labels): Producer only. */
     private void requireEditAccess(Task task, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return;
-        }
         projectAccessGuard.requireManageAccess(task.getProject(), currentUser);
-    }
-
-    private TeamRole resolveTeamRole(UUID projectId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return TeamRole.OWNER;
-        }
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Project", projectId));
-        UUID teamId = project.getTeam().getId();
-        return teamMemberRepository.findByTeamIdAndUserId(teamId, currentUser.getId())
-                .map(TeamMember::getTeamRole)
-                .orElseThrow(() -> new ForbiddenOperationException("You are not a member of this project's team"));
     }
 }
