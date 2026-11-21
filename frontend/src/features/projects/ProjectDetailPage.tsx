@@ -2,17 +2,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { Plus, UserPlus, BarChart3, CheckCircle, AlertTriangle, Clock } from 'lucide-react'
+import { Plus, UserPlus, BarChart3, CheckCircle, AlertTriangle, Clock, Pencil, CalendarDays } from 'lucide-react'
 import { projectApi, dashboardApi, teamApi } from '../../api/endpoints'
-import { Button, Card, ErrorBanner, Field, Input, Spinner } from '../../components/ui'
+import { Button, Card, ErrorBanner, Field, Input, Spinner, Badge } from '../../components/ui'
 import { extractErrorMessage } from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { PageHeader, SectionHeader } from '../../components/PageHeader'
+import { StatusBadge } from '../../components/StatusBadge'
 import { Avatar } from '../../components/Avatar'
 import { KanbanBoard } from '../board/KanbanBoard'
 import { TaskDrawer } from '../board/TaskDrawer'
 import { ActivityTimeline } from '../activities/ActivityTimeline'
-import type { Task, TeamRole } from '../../lib/types'
+import { PROJECT_STATUS_LABELS, type ProjectStatus, type Task, type TeamRole } from '../../lib/types'
+
+const PROJECT_STATUSES: ProjectStatus[] = ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED']
 
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -22,6 +25,12 @@ export function ProjectDetailPage() {
   const [modalTask, setModalTask] = useState<Task | null>(null)
   const [showDrawer, setShowDrawer] = useState(false)
   const [memberEmail, setMemberEmail] = useState('')
+  const [isEditingProject, setIsEditingProject] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editStatus, setEditStatus] = useState<ProjectStatus>('PLANNING')
+  const [editStartDate, setEditStartDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
 
   const projectQuery = useQuery({
     queryKey: ['projects', projectId],
@@ -82,6 +91,23 @@ export function ProjectDetailPage() {
     onError: (err) => toast.error(extractErrorMessage(err, 'Could not add that member')),
   })
 
+  const updateProject = useMutation({
+    mutationFn: () =>
+      projectApi.update(projectId!, {
+        name: editName.trim(),
+        description: editDescription.trim() || undefined,
+        status: editStatus,
+        startDate: editStartDate || undefined,
+        endDate: editEndDate || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Project updated')
+      setIsEditingProject(false)
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+    onError: (err) => toast.error(extractErrorMessage(err, 'Could not update the project')),
+  })
+
   if (projectQuery.isLoading) {
     return (
       <div className="flex justify-center py-16">
@@ -108,19 +134,125 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in min-w-0 max-w-full">
       <PageHeader
         title={project.name}
         description={project.description || 'No description provided'}
         action={
-          canManage && (
-            <Button onClick={openCreateModal}>
-              <Plus className="h-4 w-4" />
-              New Task
-            </Button>
-          )
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {currentUserTeamRole && (
+              <Badge variant={isOwner ? 'success' : isManager ? 'warning' : 'info'}>
+                {currentUserTeamRole}
+              </Badge>
+            )}
+            <StatusBadge status={project.status} />
+            {canManage && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setEditName(project.name)
+                  setEditDescription(project.description || '')
+                  setEditStatus(project.status)
+                  setEditStartDate(project.startDate || '')
+                  setEditEndDate(project.endDate || '')
+                  setIsEditingProject((value) => !value)
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                Edit project
+              </Button>
+            )}
+            {canManage && (
+              <Button onClick={openCreateModal}>
+                <Plus className="h-4 w-4" />
+                New Task
+              </Button>
+            )}
+          </div>
         }
       />
+
+      {isEditingProject && canManage && (
+        <Card className="p-5 sm:p-6">
+          <div className="mb-5">
+            <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-100">Edit project</h2>
+            <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">
+              Update the project details, timeline, or status.
+            </p>
+          </div>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              updateProject.mutate()
+            }}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Project name">
+                <Input value={editName} onChange={(event) => setEditName(event.target.value)} required maxLength={150} />
+              </Field>
+              <Field label="Status">
+                <select
+                  className="glass-input"
+                  value={editStatus}
+                  onChange={(event) => setEditStatus(event.target.value as ProjectStatus)}
+                >
+                  {PROJECT_STATUSES.map((projectStatus) => (
+                    <option key={projectStatus} value={projectStatus}>
+                      {PROJECT_STATUS_LABELS[projectStatus]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Description">
+                <Input
+                  value={editDescription}
+                  onChange={(event) => setEditDescription(event.target.value)}
+                  maxLength={2000}
+                />
+              </Field>
+              <Field label="Start date">
+                <Input type="date" value={editStartDate} onChange={(event) => setEditStartDate(event.target.value)} />
+              </Field>
+              <Field label="Due date">
+                <Input
+                  type="date"
+                  value={editEndDate}
+                  min={editStartDate || undefined}
+                  onChange={(event) => setEditEndDate(event.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button type="submit" loading={updateProject.isPending}>Save changes</Button>
+              <Button type="button" variant="secondary" onClick={() => setIsEditingProject(false)}>Cancel</Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {(project.startDate || project.endDate) && (
+        <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-surface-600 dark:text-surface-300">
+            <CalendarDays className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+            <span>Project timeline</span>
+          </div>
+          {project.startDate && (
+            <p className="text-sm text-surface-500 dark:text-surface-400">
+              Starts <span className="font-semibold text-surface-700 dark:text-surface-200">
+                {new Date(`${project.startDate}T00:00:00`).toLocaleDateString()}
+              </span>
+            </p>
+          )}
+          {project.endDate && (
+            <p className="text-sm text-surface-500 dark:text-surface-400">
+              Due <span className="font-semibold text-surface-700 dark:text-surface-200">
+                {new Date(`${project.endDate}T00:00:00`).toLocaleDateString()}
+              </span>
+            </p>
+          )}
+        </Card>
+      )}
 
       {/* Dashboard Stats */}
       {dashboard && (

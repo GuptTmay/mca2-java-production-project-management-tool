@@ -1,6 +1,13 @@
 export type Role = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER'
 export type TeamRole = 'OWNER' | 'MANAGER' | 'MEMBER'
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'
+export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
+  PLANNING: 'Planning',
+  ACTIVE: 'Active',
+  ON_HOLD: 'On Hold',
+  COMPLETED: 'Completed',
+  ARCHIVED: 'Archived',
+}
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE'
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
 export type ActivityType = 'TASK_CREATED' | 'TASK_ASSIGNED' | 'TASK_STATUS_CHANGED' | 'TASK_PRIORITY_CHANGED' | 'LABEL_ADDED' | 'LABEL_REMOVED' | 'COMMENT_ADDED' | 'TASK_UPDATED'

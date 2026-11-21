@@ -1,54 +1,54 @@
 import clsx from 'clsx'
 import { CheckCircle2, Circle, Clock, AlertTriangle, Archive, Pause } from 'lucide-react'
-import type { TaskStatus, ProjectStatus } from '../lib/types'
+import { PROJECT_STATUS_LABELS, type TaskStatus, type ProjectStatus } from '../lib/types'
 
 const TASK_STATUS_CONFIG: Record<TaskStatus, { label: string; className: string; icon: any }> = {
   TODO: {
     label: 'To Do',
-    className: 'bg-surface-100 text-surface-600 border-surface-200/60',
+    className: 'bg-surface-100 text-surface-600 border-surface-200/60 dark:bg-surface-800 dark:text-surface-300 dark:border-surface-700',
     icon: Circle,
   },
   IN_PROGRESS: {
     label: 'In Progress',
-    className: 'bg-blue-50 text-blue-700 border-blue-100/60',
+    className: 'bg-blue-50 text-blue-700 border-blue-100/60 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50',
     icon: Clock,
   },
   IN_REVIEW: {
     label: 'In Review',
-    className: 'bg-amber-50 text-amber-700 border-amber-100/60',
+    className: 'bg-amber-50 text-amber-700 border-amber-100/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50',
     icon: AlertTriangle,
   },
   DONE: {
     label: 'Done',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-100/60',
+    className: 'bg-emerald-50 text-emerald-700 border-emerald-100/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50',
     icon: CheckCircle2,
   },
 }
 
 const PROJECT_STATUS_CONFIG: Record<ProjectStatus, { label: string; className: string; icon: any }> = {
   PLANNING: {
-    label: 'Planning',
-    className: 'bg-surface-100 text-surface-600 border-surface-200/60',
+    label: PROJECT_STATUS_LABELS.PLANNING,
+    className: 'bg-surface-100 text-surface-600 border-surface-200/60 dark:bg-surface-800 dark:text-surface-300 dark:border-surface-700',
     icon: Circle,
   },
   ACTIVE: {
-    label: 'Active',
-    className: 'bg-blue-50 text-blue-700 border-blue-100/60',
+    label: PROJECT_STATUS_LABELS.ACTIVE,
+    className: 'bg-blue-50 text-blue-700 border-blue-100/60 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800/50',
     icon: Clock,
   },
   ON_HOLD: {
-    label: 'On Hold',
-    className: 'bg-amber-50 text-amber-700 border-amber-100/60',
+    label: PROJECT_STATUS_LABELS.ON_HOLD,
+    className: 'bg-amber-50 text-amber-700 border-amber-100/60 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50',
     icon: Pause,
   },
   COMPLETED: {
-    label: 'Completed',
-    className: 'bg-emerald-50 text-emerald-700 border-emerald-100/60',
+    label: PROJECT_STATUS_LABELS.COMPLETED,
+    className: 'bg-emerald-50 text-emerald-700 border-emerald-100/60 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800/50',
     icon: CheckCircle2,
   },
   ARCHIVED: {
-    label: 'Archived',
-    className: 'bg-surface-100 text-surface-500 border-surface-200/60',
+    label: PROJECT_STATUS_LABELS.ARCHIVED,
+    className: 'bg-surface-100 text-surface-500 border-surface-200/60 dark:bg-surface-800 dark:text-surface-400 dark:border-surface-700',
     icon: Archive,
   },
 }

@@ -10,12 +10,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, action, className }: PageHeaderProps) {
   return (
-    <div className={clsx('flex items-start justify-between gap-4', className)}>
-      <div>
-        <h1 className="text-2xl font-bold text-surface-900 tracking-tight">{title}</h1>
-        {description && <p className="mt-1 text-sm text-surface-500">{description}</p>}
+    <div className={clsx('flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between', className)}>
+      <div className="min-w-0 flex-1">
+        <h1 className="text-2xl font-bold text-surface-900 tracking-tight dark:text-surface-100">{title}</h1>
+        {description && <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">{description}</p>}
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action && <div className="w-full flex-shrink-0 sm:w-auto">{action}</div>}
     </div>
   )
 }
@@ -29,12 +29,12 @@ interface SectionHeaderProps {
 
 export function SectionHeader({ title, description, action, className }: SectionHeaderProps) {
   return (
-    <div className={clsx('flex items-center justify-between gap-4', className)}>
-      <div>
-        <h2 className="text-lg font-semibold text-surface-900">{title}</h2>
-        {description && <p className="mt-0.5 text-sm text-surface-500">{description}</p>}
+    <div className={clsx('flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', className)}>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-lg font-semibold text-surface-900 dark:text-surface-100">{title}</h2>
+        {description && <p className="mt-0.5 text-sm text-surface-500 dark:text-surface-400">{description}</p>}
       </div>
-      {action && <div className="flex-shrink-0">{action}</div>}
+      {action && <div className="w-full flex-shrink-0 sm:w-auto">{action}</div>}
     </div>
   )
 }
