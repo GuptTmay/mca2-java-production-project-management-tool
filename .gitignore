@@ -1,0 +1,33 @@
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Backend (Maven) ---
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+!*/wrapper/maven-wrapper-*.jar
+
+# --- Frontend (Node) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+
+# --- TypeScript build artifacts ---
+frontend/tsconfig.tsbuildinfo
+**/*.tsbuildinfo
+
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# --- Docker ---
+*.pid
+
+# --- Logs ---
+*.log

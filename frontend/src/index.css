@@ -1,0 +1,227 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface-50 text-surface-900 antialiased;
+    background-attachment: fixed;
+  }
+
+  html.dark body {
+    @apply bg-surface-950 text-surface-100;
+  }
+
+  html.dark .glass {
+    @apply bg-surface-900/70 border-surface-700/30;
+  }
+
+  html.dark .glass-card {
+    @apply bg-surface-900/70 border-surface-700/30 shadow-surface-900/20;
+  }
+
+  html.dark .glass-input {
+    @apply border-surface-700/60 bg-surface-800/60 text-surface-100 placeholder:text-surface-500;
+    @apply focus:border-brand-400 focus:bg-surface-800/80;
+  }
+
+  html.dark .kanban-column {
+    @apply border-surface-700/60 bg-surface-800/40;
+  }
+
+  html.dark .task-card {
+    @apply border-surface-700/60 bg-surface-800/80;
+    @apply hover:border-brand-400/40;
+  }
+
+  html.dark .drawer-content {
+    @apply bg-surface-900/95 border-surface-700/30;
+  }
+
+  html.dark .modal-content {
+    @apply bg-surface-900/95 border-surface-700/30;
+  }
+
+  html.dark .skeleton {
+    @apply from-surface-800 via-surface-700 to-surface-800;
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+
+  html.dark ::selection {
+    @apply bg-brand-700 text-brand-100;
+  }
+
+  input, textarea, select {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20;
+  }
+
+  .dark .glass {
+    @apply bg-surface-900/70 backdrop-blur-xl border border-surface-700/30;
+  }
+
+  .glass-card {
+    @apply glass rounded-2xl shadow-sm transition-all duration-200;
+  }
+
+  .glass-card-hover {
+    @apply glass-card hover:shadow-md hover:border-surface-300/60 hover:-translate-y-0.5;
+  }
+
+  .glass-input {
+    @apply w-full rounded-xl border border-surface-200/60 bg-white/60 backdrop-blur-sm px-4 py-2.5 text-sm text-surface-900 placeholder:text-surface-400 transition-all duration-200;
+    @apply focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10 focus:bg-white/80;
+    @apply disabled:bg-surface-100/50 disabled:text-surface-500;
+  }
+
+  .dark .glass-input {
+    @apply border-surface-700/60 bg-surface-800/60 text-surface-100 placeholder:text-surface-500;
+    @apply focus:border-brand-400 focus:bg-surface-800/80;
+    @apply disabled:bg-surface-900/50 disabled:text-surface-500;
+  }
+
+  .glass-sidebar {
+    @apply bg-white/80 backdrop-blur-2xl border-r border-surface-200/60;
+  }
+
+  .dark .glass-sidebar {
+    @apply bg-surface-900/80 backdrop-blur-2xl border-r border-surface-700/30;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200;
+  }
+
+  .nav-item-active {
+    @apply bg-brand-50 text-brand-700 border border-brand-100/50;
+  }
+
+  .dark .nav-item-active {
+    @apply bg-brand-900/30 text-brand-300 border border-brand-700/30;
+  }
+
+  .nav-item-inactive {
+    @apply text-surface-500 hover:bg-surface-100/60 hover:text-brand-700;
+  }
+
+  .dark .nav-item-inactive {
+    @apply text-surface-400 hover:bg-surface-800/60 hover:text-brand-300;
+  }
+
+  .stat-card {
+    @apply glass-card p-5 relative overflow-hidden;
+  }
+
+  .stat-card-icon {
+    @apply p-2.5 rounded-xl bg-gradient-to-br from-brand-50 to-indigo-50 text-brand-600;
+  }
+
+  .dark .stat-card-icon {
+    @apply from-brand-900/30 to-indigo-900/30 text-brand-400;
+  }
+
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand-600 via-indigo-600 to-cyan-600 bg-clip-text text-transparent;
+  }
+
+  .skeleton {
+    @apply animate-shimmer rounded-xl bg-gradient-to-r from-surface-200 via-surface-100 to-surface-200 bg-[length:200%_100%];
+  }
+
+  .dark .skeleton {
+    @apply from-surface-800 via-surface-700 to-surface-800;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-surface-950/40 backdrop-blur-sm px-4;
+  }
+
+  .modal-content {
+    @apply max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white/95 backdrop-blur-xl shadow-glass-lg border border-white/20;
+  }
+
+  .dark .modal-content {
+    @apply bg-surface-900/95 border-surface-700/30;
+  }
+
+  .kanban-column {
+    @apply flex w-72 flex-shrink-0 flex-col rounded-2xl border border-surface-200/60 bg-white/40 backdrop-blur-sm p-3 transition-all duration-200;
+  }
+
+  .dark .kanban-column {
+    @apply border-surface-700/60 bg-surface-800/40;
+  }
+
+  .kanban-column-drag {
+    @apply ring-2 ring-brand-400/50 bg-brand-50/30 shadow-glass;
+  }
+
+  .task-card {
+    @apply cursor-grab space-y-2.5 rounded-xl border border-surface-200/60 bg-white/80 backdrop-blur-sm p-4 shadow-sm active:cursor-grabbing transition-all duration-200;
+    @apply hover:shadow-md hover:border-brand-200/60 hover:-translate-y-0.5;
+  }
+
+  .dark .task-card {
+    @apply border-surface-700/60 bg-surface-800/80;
+    @apply hover:border-brand-400/40;
+  }
+
+  .task-card-dragging {
+    @apply opacity-50 rotate-2 shadow-glass;
+  }
+
+  .drawer-overlay {
+    @apply fixed inset-0 z-50 bg-surface-950/30 backdrop-blur-sm transition-opacity duration-300;
+  }
+
+  .drawer-content {
+    @apply fixed right-0 top-0 z-50 h-full w-full max-w-2xl overflow-y-auto bg-white/95 backdrop-blur-xl shadow-2xl border-l border-white/20 transition-transform duration-300;
+  }
+
+  .dark .drawer-content {
+    @apply bg-surface-900/95 border-surface-700/30;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.5);
+  }
+}
