@@ -47,7 +47,8 @@ class NotificationServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
         Page<Notification> page = new PageImpl<>(List.of(notification(userId)));
         when(notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)).thenReturn(page);
-        when(notificationMapper.toResponse(any(Notification.class))).thenCallRealMethod();
+        when(notificationMapper.toResponse(any(Notification.class))).thenReturn(new NotificationResponse(
+                UUID.randomUUID(), userId, NotificationType.TASK_ASSIGNED, "msg", null, false, java.time.Instant.now()));
 
         var result = notificationService.listForUser(userId, pageable);
 

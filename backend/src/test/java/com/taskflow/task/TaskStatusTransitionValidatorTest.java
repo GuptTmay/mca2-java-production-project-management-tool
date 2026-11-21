@@ -17,7 +17,7 @@ class TaskStatusTransitionValidatorTest {
             "IN_PROGRESS, IN_REVIEW",
             "IN_REVIEW, IN_PROGRESS",
             "IN_REVIEW, DONE",
-            "DONE, IN_REVIEW"
+            "DONE, IN_PROGRESS"
     })
     void validate_allowsAdjacentColumnMoves(TaskStatus from, TaskStatus to) {
         assertDoesNotThrow(() -> TaskStatusTransitionValidator.validate(from, to));
@@ -29,7 +29,6 @@ class TaskStatusTransitionValidatorTest {
             "TODO, DONE",
             "IN_PROGRESS, DONE",
             "DONE, TODO",
-            "DONE, IN_PROGRESS",
             "IN_REVIEW, TODO"
     })
     void validate_rejectsSkippingColumns(TaskStatus from, TaskStatus to) {

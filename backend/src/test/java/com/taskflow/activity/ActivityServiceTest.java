@@ -26,6 +26,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,6 +58,8 @@ class ActivityServiceTest {
         User outsider = user(Role.DEVELOPER);
         Task task = task(outsider);
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        doThrow(new ForbiddenOperationException("nope"))
+                .when(projectAccessGuard).requireViewAccess(task.getProject(), outsider);
 
         assertThrows(ForbiddenOperationException.class,
                 () -> activityService.listForTask(task.getId(), outsider));
@@ -68,6 +71,8 @@ class ActivityServiceTest {
         User outsider = user(Role.DEVELOPER);
         Project project = project(outsider);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
+        doThrow(new ForbiddenOperationException("nope"))
+                .when(projectAccessGuard).requireViewAccess(project, outsider);
 
         assertThrows(ForbiddenOperationException.class,
                 () -> activityService.listForProject(project.getId(), outsider));

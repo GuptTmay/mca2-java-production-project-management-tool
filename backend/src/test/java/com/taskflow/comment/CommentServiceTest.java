@@ -77,7 +77,9 @@ class CommentServiceTest {
         CommentRequest request = new CommentRequest("Nice work!");
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
         when(commentRepository.save(any(Comment.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(commentMapper.toResponse(any(Comment.class))).thenCallRealMethod();
+        when(commentMapper.toResponse(any(Comment.class))).thenReturn(new CommentResponse(
+                UUID.randomUUID(), task.getId(), author.getId(), author.getFirstName(), author.getLastName(),
+                author.getEmail(), request.content(), java.time.Instant.now(), java.time.Instant.now()));
 
         commentService.createComment(task.getId(), request, author);
 

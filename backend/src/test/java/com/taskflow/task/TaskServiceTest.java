@@ -14,6 +14,7 @@ import com.taskflow.task.TaskHistoryMapper;
 import com.taskflow.task.TaskHistoryRepository;
 import com.taskflow.task.dto.AssignTaskRequest;
 import com.taskflow.task.dto.CreateTaskRequest;
+import com.taskflow.task.dto.TaskResponse;
 import com.taskflow.task.dto.UpdateTaskRequest;
 import com.taskflow.task.dto.UpdateTaskStatusRequest;
 import com.taskflow.user.Role;
@@ -93,6 +94,13 @@ class TaskServiceTest {
         CreateTaskRequest request = new CreateTaskRequest(project.getId(), "Fix bug", "desc", null, null, null);
         when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(taskMapper.toResponse(any(Task.class))).thenAnswer(inv -> {
+            Task t = inv.getArgument(0);
+            return new TaskResponse(t.getId(), t.getProject().getId(), t.getTitle(), t.getDescription(),
+                    t.getStatus(), t.getPriority(), t.getAssignee() != null ? t.getAssignee().getId() : null,
+                    t.getReporter().getId(), t.getDeadline(), java.util.Set.of(), 0L,
+                    java.time.Instant.now(), java.time.Instant.now());
+        });
 
         taskService.createTask(request, reporter);
 

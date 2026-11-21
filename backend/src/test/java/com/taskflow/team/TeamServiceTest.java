@@ -160,7 +160,6 @@ class TeamServiceTest {
         org.mockito.Mockito.doNothing().when(teamAccessGuard).requireManageAccess(team.getId(), manager);
         when(teamMemberRepository.findByTeamIdAndUserId(team.getId(), manager.getId()))
                 .thenReturn(Optional.of(managerMembership));
-        when(userRepository.findByEmail(newUser.getEmail())).thenReturn(Optional.of(newUser));
 
         AddTeamMemberRequest request = new AddTeamMemberRequest(newUser.getEmail(), TeamRole.MANAGER);
 
@@ -175,8 +174,6 @@ class TeamServiceTest {
         TeamMember managerMembership = new TeamMember(team, manager, TeamRole.MANAGER);
 
         when(teamRepository.findById(team.getId())).thenReturn(Optional.of(team));
-        when(teamMemberRepository.findByTeamIdAndUserId(team.getId(), manager.getId()))
-                .thenReturn(Optional.of(managerMembership));
         org.mockito.Mockito.doThrow(new com.taskflow.common.exception.ForbiddenOperationException("nope"))
                 .when(teamAccessGuard).requireOwnerAccess(team.getId(), manager);
 
