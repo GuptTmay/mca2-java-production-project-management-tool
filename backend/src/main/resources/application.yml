@@ -32,7 +32,7 @@ server:
 
 taskflow:
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:hfF6G5U9oo8Df8Y/+QQ20qdGH5nalxbAMj6Zp1eRldlio6lLw57I1WxY77H5ekabQlCLtSHLwLqelnCpd9tbPA==}
     access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:900000}      # 15 min
     refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000} # 7 days
   cors:
