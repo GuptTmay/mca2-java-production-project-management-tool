@@ -25,8 +25,7 @@ public class ProjectAccessGuard {
     }
 
     /**
-     * Explicit project member, team OWNER/MANAGER (even without explicit project
-     * membership - they manage the whole team), or a global ADMIN.
+     * Explicit project member, any member of the project's team, or a global ADMIN.
      */
     public void requireViewAccess(Project project, User currentUser) {
         if (currentUser.getRole() == Role.ADMIN) {
@@ -36,7 +35,7 @@ public class ProjectAccessGuard {
             return;
         }
         try {
-            teamAccessGuard.requireManageAccess(project.getTeam().getId(), currentUser);
+            teamAccessGuard.requireMembership(project.getTeam().getId(), currentUser);
         } catch (ForbiddenOperationException ex) {
             throw new ForbiddenOperationException("You do not have access to this project");
         }

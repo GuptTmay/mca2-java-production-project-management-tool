@@ -57,23 +57,22 @@ class ProjectAccessGuardTest {
     }
 
     @Test
-    void requireViewAccess_fallsBackToTeamManageAccessWhenNotAProjectMember() {
-        User manager = user(Role.DEVELOPER);
-        Project project = project(manager);
-        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), manager.getId())).thenReturn(false);
-        // teamAccessGuard.requireManageAccess is a no-op mock by default => team-level access granted
+    void requireViewAccess_allowsTeamMemberWhoIsNotExplicitProjectMember() {
+        User teamMember = user(Role.DEVELOPER);
+        Project project = project(teamMember);
+        when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), teamMember.getId())).thenReturn(false);
 
-        assertDoesNotThrow(() -> guard.requireViewAccess(project, manager));
-        verify(teamAccessGuard).requireManageAccess(project.getTeam().getId(), manager);
+        assertDoesNotThrow(() -> guard.requireViewAccess(project, teamMember));
+        verify(teamAccessGuard).requireMembership(project.getTeam().getId(), teamMember);
     }
 
     @Test
-    void requireViewAccess_forbidsUserWhoIsNeitherProjectMemberNorTeamManager() {
+    void requireViewAccess_forbidsUserWhoIsNotAProjectOrTeamMember() {
         User outsider = user(Role.DEVELOPER);
         Project project = project(outsider);
         when(projectMemberRepository.existsByProjectIdAndUserId(project.getId(), outsider.getId())).thenReturn(false);
         doThrow(new ForbiddenOperationException("nope"))
-                .when(teamAccessGuard).requireManageAccess(project.getTeam().getId(), outsider);
+                .when(teamAccessGuard).requireMembership(project.getTeam().getId(), outsider);
 
         assertThrows(ForbiddenOperationException.class, () -> guard.requireViewAccess(project, outsider));
     }

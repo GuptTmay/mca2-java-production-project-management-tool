@@ -9,7 +9,9 @@ import com.taskflow.project.ProjectAccessGuard;
 import com.taskflow.project.ProjectRepository;
 import com.taskflow.team.Team;
 import com.taskflow.team.TeamAccessGuard;
+import com.taskflow.team.TeamMember;
 import com.taskflow.team.TeamMemberRepository;
+import com.taskflow.team.TeamRole;
 import com.taskflow.task.TaskHistoryMapper;
 import com.taskflow.task.TaskHistoryRepository;
 import com.taskflow.task.dto.AssignTaskRequest;
@@ -174,19 +176,39 @@ class TaskServiceTest {
     }
 
     @Test
-    void updateStatus_requiresManageAccess() {
+    void updateStatus_allowsMemberTransitionsPermittedByTheirRole() {
         User assignee = user(Role.DEVELOPER);
-        User otherMember = user(Role.DEVELOPER);
         Project project = project(assignee);
         Task task = task(project, assignee, assignee);
         UpdateTaskStatusRequest request = new UpdateTaskStatusRequest(TaskStatus.IN_PROGRESS);
 
         when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
-        doThrow(new ForbiddenOperationException("nope"))
-                .when(projectAccessGuard).requireManageAccess(project, otherMember);
+        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserId(project.getTeam().getId(), assignee.getId()))
+                .thenReturn(Optional.of(new TeamMember(project.getTeam(), assignee, TeamRole.MEMBER)));
 
-        assertThrows(ForbiddenOperationException.class,
-                () -> taskService.updateStatus(task.getId(), request, otherMember));
+        taskService.updateStatus(task.getId(), request, assignee);
+
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        verify(projectAccessGuard).requireViewAccess(project, assignee);
+    }
+
+    @Test
+    void updateStatus_rejectsMemberTransitionsReservedForManagers() {
+        User member = user(Role.DEVELOPER);
+        Project project = project(member);
+        Task task = task(project, member, member);
+        task.setStatus(TaskStatus.IN_REVIEW);
+        UpdateTaskStatusRequest request = new UpdateTaskStatusRequest(TaskStatus.DONE);
+
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+        when(projectRepository.findById(project.getId())).thenReturn(Optional.of(project));
+        when(teamMemberRepository.findByTeamIdAndUserId(project.getTeam().getId(), member.getId()))
+                .thenReturn(Optional.of(new TeamMember(project.getTeam(), member, TeamRole.MEMBER)));
+
+        assertThrows(InvalidStateTransitionException.class,
+                () -> taskService.updateStatus(task.getId(), request, member));
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.IN_REVIEW);
     }
 
     @Test

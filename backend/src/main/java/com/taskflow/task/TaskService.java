@@ -148,7 +148,7 @@ public class TaskService {
     @Transactional
     public TaskResponse updateStatus(UUID taskId, UpdateTaskStatusRequest request, User currentUser) {
         Task task = findTaskOrThrow(taskId);
-        projectAccessGuard.requireManageAccess(task.getProject(), currentUser);
+        projectAccessGuard.requireViewAccess(task.getProject(), currentUser);
 
         TaskStatus oldStatus = task.getStatus();
         TaskStatus targetStatus = request.status();
